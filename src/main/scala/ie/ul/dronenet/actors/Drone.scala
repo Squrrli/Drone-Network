@@ -7,14 +7,14 @@ object Drone{
 
   final case object Ping
 
-  final case class ReqMission(reqId: Long, actorRef: ActorRef)
+  final case class RequestMission(reqId: Long, actorRef: ActorRef)
   final case class AssignMission(reqId: Long, missionDetails: String) // TODO: mission details defined in some kind of structure/ object
 
-  final case class ReqAvailability(reqId: Long)
-  final case class ResAvailability(reqId: Long, boolean: Boolean)
+  final case class RequestAvailability(reqId: Long)
+  final case class RespondAvailability(reqId: Long, boolean: Boolean)
 
-  final case class ReqCoordinates(reqId: Long)
-  final case class ResCoordinates(reqId: Long, coords: (Double, Double, Double)) // TODO: Look into this config. vs. Telling another actor to change route
+  final case class RequestCoordinates(reqId: Long)
+  final case class RespondCoordinates(reqId: Long, coords: (Double, Double, Double)) // TODO: Look into this config. vs. Telling another actor to change route
 
   final case class LocateClosestBaseStation()
   final case class GoToBaseStation(coords: (Double, Double), actorRef: ActorRef)
@@ -31,5 +31,8 @@ class Drone(id: Long, droneType: Int) extends Actor with ActorLogging {
   override def receive: Receive = {
     case Ping => log.info(s"Pinging Drone id:${id}")
     case AssignMission(reqId, missionDetails) => log.info(s"ReqId: ${reqId}, Mission: ${missionDetails}")
+    case GoToBaseStation => {}
+    case RequestAvailability => {}
+    case RequestCoordinates => {}
   }
 }
