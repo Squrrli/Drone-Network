@@ -1,10 +1,11 @@
-package ie.ul.dronenet.actors
+ package ie.ul.dronenet.actors
 
 import akka.actor.{Actor, ActorLogging, ActorRef, Props}
 
 object Drone{
   def props(id: Long, droneType: Int): Props = Props(new Drone(id: Long, droneType: Int))
 
+  /* Actor Messages */
   final case object Ping
 
   final case class RequestMission(reqId: Long, actorRef: ActorRef)
