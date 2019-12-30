@@ -13,6 +13,6 @@ class DroneManager extends Actor with ActorLogging{
   import DroneManager._
 
   override def receive: Receive = {
-    case Ping => log.info("Pinged");
+    case Ping => log.info("Pinged")
   }
 }

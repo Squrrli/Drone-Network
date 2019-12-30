@@ -19,7 +19,7 @@ class BaseStation(id: Int, name: String) extends Actor with ActorLogging {
 
   override def receive: Receive = {
     case Ping => log.info(s"Pinging Drone id:${id}")
-    case RequestCapacity => {}
-    case RequestDrone => {}
+    case RequestCapacity => log.info("Requested capacity")
+    case RequestDrone => log.info("Requested drone")
   }
 }

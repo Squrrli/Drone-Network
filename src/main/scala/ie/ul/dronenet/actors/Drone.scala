@@ -32,8 +32,8 @@ class Drone(id: Long, droneType: Int) extends Actor with ActorLogging {
   override def receive: Receive = {
     case Ping => log.info(s"Pinging Drone id:${id}")
     case AssignMission(reqId, missionDetails) => log.info(s"ReqId: ${reqId}, Mission: ${missionDetails}")
-    case GoToBaseStation => {}
-    case RequestAvailability => {}
-    case RequestCoordinates => {}
+    case GoToBaseStation => log.info("go to station")
+    case RequestAvailability => log.info("req availability")
+    case RequestCoordinates => log.info("req coords")
   }
 }

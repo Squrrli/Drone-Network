@@ -16,8 +16,8 @@ class BaseManager extends Actor with ActorLogging{
   import BaseManager._
 
   override def  receive: Receive = {
-    case RequestDroneFromDroneManager => _
-    case RespondDroneToBase => _
+    case RequestDroneFromDroneManager => log.info("req drone ref from manager")
+    case RespondDroneToBase => log.info("res drone ref to base")
     case Ping => log.info("PING")
   }
 }
