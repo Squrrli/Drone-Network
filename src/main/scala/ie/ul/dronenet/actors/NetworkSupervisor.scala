@@ -10,7 +10,7 @@ object NetworkSupervisor {
 class NetworkSupervisor extends Actor with ActorLogging {
   override def preStart(): Unit = {
     log.info("DroneNetwork Started")
-    setupTestDrone()
+//    setupTestDrone()
   }
 
   override def postStop(): Unit = log.info("Drone-Network exiting")
