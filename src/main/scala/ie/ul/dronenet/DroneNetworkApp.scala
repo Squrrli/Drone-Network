@@ -1,7 +1,7 @@
 package ie.ul.dronenet
 
-import akka.actor.ActorSystem
-import ie.ul.dronenet.actors.{NetworkSupervisor, NetworkListener}
+import akka.actor.{ActorSystem, AddressFromURIString}
+import ie.ul.dronenet.actors.{NetworkListener, NetworkSupervisor}
 
 import scala.io.StdIn
 
