@@ -1,40 +1,52 @@
-//package ie.ul.dronenet.actors
-//
-//import akka.cluster.Cluster
-//import akka.cluster.ClusterEvent._
-//import akka.actor.{Actor, ActorLogging, Props}
-//
-//object NetworkListener {
-//  def props(): Props = Props(new NetworkListener)
-//}
-//
-///**
-// * Drone Actor to listen to and log Cluster events
-// */
-//class NetworkListener extends Actor with ActorLogging {
-//
-//  val cluster = Cluster(context.system)
-//
-//  // Subscribe to cluster events onStart/Restart
-//  override def preStart(): Unit = {
-//    log.warning("NetworkListener starting, subscribing to Cluster")
-//    cluster.subscribe(self, initialStateMode = InitialStateAsEvents,
-//                      classOf[MemberEvent], classOf[UnreachableMember])
-//  }
-//
-//  // Unsubscribe before stop to ensure events not being sent to dead listener
-//  override def postStop(): Unit = cluster.unsubscribe(self)
-//
-//
-//  override def receive: Receive = {
-//    case MemberUp(member) =>
-//      log.info("Member is Up: {}", member.address)
-//    case UnreachableMember(member) =>
-//      log.info("Member detected as unreachable: {}", member)
-//    case MemberRemoved(member, previousStatus) =>
-//      log.info(
-//        "Member is Removed: {} after {}",
-//        member.address, previousStatus)
-//    case _: MemberEvent => // ignore
-//  }
-//}
+package ie.ul.dronenet.actors
+
+import akka.actor.typed.ActorRef
+import akka.actor.typed.Behavior
+import akka.actor.typed.scaladsl.Behaviors
+import akka.cluster.ClusterEvent.MemberEvent
+import akka.cluster.ClusterEvent.MemberRemoved
+import akka.cluster.ClusterEvent.MemberUp
+import akka.cluster.ClusterEvent.ReachabilityEvent
+import akka.cluster.ClusterEvent.ReachableMember
+import akka.cluster.ClusterEvent.UnreachableMember
+import akka.cluster.typed.Cluster
+import akka.cluster.typed.Subscribe
+
+object ClusterListener {
+
+  sealed trait Event
+  // internal adapted cluster events only
+  private final case class ReachabilityChange(reachabilityEvent: ReachabilityEvent) extends Event
+  private final case class MemberChange(event: MemberEvent) extends Event
+
+  def apply(): Behavior[Event] = Behaviors.setup { ctx =>
+    val memberEventAdapter: ActorRef[MemberEvent] = ctx.messageAdapter(MemberChange)
+    Cluster(ctx.system).subscriptions ! Subscribe(memberEventAdapter, classOf[MemberEvent])
+
+    val reachabilityAdapter = ctx.messageAdapter(ReachabilityChange)
+    Cluster(ctx.system).subscriptions ! Subscribe(reachabilityAdapter, classOf[ReachabilityEvent])
+
+    Behaviors.receiveMessage { message =>
+      message match {
+        case ReachabilityChange(reachabilityEvent) =>
+          reachabilityEvent match {
+            case UnreachableMember(member) =>
+              ctx.log.info("Member detected as unreachable: {}", member)
+            case ReachableMember(member) =>
+              ctx.log.info("Member back to reachable: {}", member)
+          }
+
+        case MemberChange(changeEvent) =>
+          changeEvent match {
+            case MemberUp(member) =>
+              ctx.log.info("Member is Up: {}", member.address)
+            case MemberRemoved(member, previousStatus) =>
+              ctx.log.info("Member is Removed: {} after {}",
+                member.address, previousStatus)
+            case _: MemberEvent => // ignore
+          }
+      }
+      Behaviors.same
+    }
+  }
+}

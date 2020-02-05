@@ -1,25 +1,15 @@
 package ie.ul.dronenet.actors
 
-import akka.actor.{Actor, ActorLogging, Props}
-import ie.ul.dronenet.actors.Drone._
+import akka.actor.typed.{Behavior, Signal}
+import akka.actor.typed.scaladsl.{AbstractBehavior, ActorContext, Behaviors}
 
 object NetworkSupervisor {
-  def props(): Props = Props(new NetworkSupervisor)
+  def apply(): Behavior[String] =
+    Behaviors.setup(context => new NetworkSupervisor(context))
 }
 
-class NetworkSupervisor extends Actor with ActorLogging {
-  override def preStart(): Unit = {
-    log.info("DroneNetwork Started")
-//    setupTestDrone()
-  }
+class NetworkSupervisor(context: ActorContext[String]) extends AbstractBehavior[String](context) {
+  println(s"${context.self.path} has started")
 
-  override def postStop(): Unit = log.info("Drone-Network exiting")
-
-  def setupTestDrone(): Unit = {
-    val drone1 = context.actorOf(Drone.props(0, 1))
-    drone1 ! Ping
-    drone1 ! AssignMission(2314, "TestMission1")
-  }
-
-  override def receive: Receive = Actor.emptyBehavior
+  override def onMessage(msg: String): Behavior[String] = Behaviors.empty
 }
