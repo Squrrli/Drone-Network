@@ -1,6 +1,7 @@
  package ie.ul.dronenet.actors
 
-import akka.actor.typed.{ActorSystem, Behavior}
+import akka.actor.typed.receptionist.{Receptionist, ServiceKey}
+import akka.actor.typed.{ActorSystem, Behavior, receptionist}
 import akka.actor.typed.scaladsl.{AbstractBehavior, ActorContext, Behaviors}
 import akka.actor.{Actor, ActorLogging, ActorRef, Props}
 import akka.cluster.ClusterEvent.{MemberEvent, MemberRemoved, MemberUp, ReachableMember, UnreachableMember}
@@ -13,9 +14,10 @@ import ie.ul.dronenet.actors.Drone.Command
  // Better practice to make these Objects as they will only be instantiated once
 
 object Drone {
+  val DroneServiceKey: ServiceKey[Command] = ServiceKey[Command]("droneService")
 
   val TypeKey: EntityTypeKey[Command] =
-    EntityTypeKey[Command]("WeatherStation")
+    EntityTypeKey[Command]("Drone")
 
   def initSharding(system: ActorSystem[_]): Unit =
     ClusterSharding(system).init(Entity(TypeKey) { entityContext =>
@@ -40,9 +42,11 @@ object Drone {
 //  final case class LocateClosestBaseStation()
 //  final case class GoToBaseStation(coords: (Double, Double), actorRef: ActorRef)
   def apply(droneId: String): Behavior[Command] =
-    Behaviors.setup {
+    Behaviors.setup[Command] {
       context =>
         context.log.info(s"Drone $droneId started")
+        // Register Drone with local Receptionist to allow drone be discovered from across the Cluster
+        context.system.receptionist ! Receptionist.register(DroneServiceKey, context.self)
         running(context, droneId)
     }
 
