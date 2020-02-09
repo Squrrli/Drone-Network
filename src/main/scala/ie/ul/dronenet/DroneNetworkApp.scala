@@ -6,7 +6,7 @@ import akka.actor.typed.{ActorSystem, Behavior}
 import akka.actor.typed.scaladsl.{AbstractBehavior, ActorContext, Behaviors}
 import akka.cluster.typed.Cluster
 import com.typesafe.config.ConfigFactory
-import ie.ul.dronenet.actors.{ClusterListener, Drone, DroneManager, NetworkSupervisor}
+import ie.ul.dronenet.actors.{BaseManager, BaseStation, ClusterListener, Drone, DroneManager, NetworkSupervisor}
 import com.typesafe.config.Config
 
 import scala.io.StdIn
@@ -31,8 +31,8 @@ object DroneNetworkApp {
         val drone = context.spawn(Drone("testDrone1"), "Drone")
         context.spawn(DroneManager("testDroneManager1", drone), "DroneManager")
       } else if (selfMember.hasRole("Base")) {
-        // spawn necessary
-//        val base = context.spawn(Base("base1"), "Base")
+        val base = context.spawn(BaseStation("testBase1"), "BaseStation")
+        context.spawn(BaseManager("testBaseManager1", base), "BSManager")
       }
 
 
