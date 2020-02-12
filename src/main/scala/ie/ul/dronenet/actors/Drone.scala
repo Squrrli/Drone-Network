@@ -28,7 +28,6 @@ object Drone {
   sealed trait Command
 
   final case object Ping extends Command
-  final case class RegisterManager(manager: ActorRef[DroneManager.Command]) extends Command
 
   //  final case class RequestMission(reqId: Long, actorRef: ActorRef)
 //  final case class AssignMission(reqId: Long, missionDetails: String) // TODO: mission details defined in some kind of structure/ object
@@ -61,9 +60,6 @@ object Drone {
     Behaviors.receiveMessage[Command] { message =>
       message match {
         case Ping => context.log.info("Pinged!")
-        case RegisterManager(manager) =>
-          localManager = Some(manager)
-
       }
       Behaviors.same
     }
