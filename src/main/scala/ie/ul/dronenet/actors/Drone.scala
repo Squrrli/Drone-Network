@@ -4,7 +4,10 @@ import akka.actor.typed.receptionist.{Receptionist, ServiceKey}
 import akka.actor.typed.{ActorRef, ActorSystem, Behavior, receptionist}
 import akka.actor.typed.scaladsl.{AbstractBehavior, ActorContext, Behaviors}
 import akka.cluster.sharding.typed.scaladsl.{ClusterSharding, Entity, EntityTypeKey}
-import ie.ul.dronenet.actors
+import com.fasterxml.jackson.databind.InjectableValues.Std
+import ie.ul.dronenet.actors.DroneManager.RequestBaseStation
+
+import scala.io.StdIn
 
  // TODO: Remove Classes of Actors that will not have multiple instances running on the same machine (i.e. Singleton and Drone)
  // Better practice to make these Objects as they will only be instantiated once
@@ -25,9 +28,11 @@ object Drone {
 //    })
 
   /* Drone Commands */
-  sealed trait Command
+  sealed trait Command extends CborSerializable
 
   final case object Ping extends Command
+  final case object ManagerReady extends Command
+  final case class RegisterBaseStation(reqId: Long, baseStation: ActorRef[BaseStation.Command]) extends Command
 
   //  final case class RequestMission(reqId: Long, actorRef: ActorRef)
 //  final case class AssignMission(reqId: Long, missionDetails: String) // TODO: mission details defined in some kind of structure/ object
@@ -44,23 +49,43 @@ object Drone {
   /**
    * Override of apply() method for instantiating Actor
    * @param droneId String ID of this Drone
-   * @param manager DroneManager Actor that facilitates actor discovery across the cluster for this Drone actor
+   * @param droneManager DroneManager Actor that facilitates actor discovery across the cluster for this Drone actor
    * @return Behavior[Drone.Command]
    */
-  def apply(droneId: String, manager: ActorRef[DroneManager.Command]): Behavior[Command] =
+  def apply(droneId: String, droneManager: ActorRef[DroneManager.Command]): Behavior[Command] =
     Behaviors.setup[Command] {
       context =>
         context.log.info(s"Drone $droneId started")
         // Register Drone with local Receptionist to allow drone be discovered from across the Cluster
         context.system.receptionist ! Receptionist.register(DroneServiceKey, context.self)
-        running(context, droneId)
+        droneManager ! DroneManager.DroneReady  // inform Manager that this Drone is ready
+
+        running(context, droneId, droneManager)
+//        findBase(context, droneManager)
+//        context.log.info("-------------- Requesting BaseStation --------------")
+//        droneManager ! RequestBaseStation(0, context.self)
+//        Behaviors.same
     }
 
-  private def running(context: ActorContext[Command], droneId: String):Behavior[Command] =
-    Behaviors.receiveMessage[Command] { message =>
-      message match {
-        case Ping => context.log.info("Pinged!")
-      }
-      Behaviors.same
+  private def running(context: ActorContext[Command], droneId: String, droneManager: ActorRef[DroneManager.Command]):Behavior[Command] =
+    Behaviors.receiveMessage[Command] {
+      case Ping =>
+        context.log.info("Pinged!")
+        Behaviors.same
+      case RegisterBaseStation(reqId, baseStation) =>
+        context.log.info("Response from BaseStation, registering {} as current, reqId: {}", baseStation, reqId)
+        currentBaseStation = Some(baseStation)
+        Behaviors.same
+      case ManagerReady =>
+        context.log.info("-------------- Requesting BaseStation --------------")
+        droneManager ! RequestBaseStation(0, context.self)
+        Behaviors.same
     }
+
+  private def findBase(context: ActorContext[Command], manager: ActorRef[DroneManager.Command]):Behavior[Command] = {
+    StdIn.readLine()
+    context.log.info("-------------- Requesting BaseStation --------------")
+    manager ! RequestBaseStation(0, context.self)
+    Behaviors.same
+  }
 }
