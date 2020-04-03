@@ -7,26 +7,18 @@ import akka.actor.typed.scaladsl.adapter._
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.server.Directives._
 import akka.http.scaladsl.model.{HttpRequest, HttpResponse, StatusCodes, Uri}
-import akka.http.scaladsl.model.HttpMethods._
-import akka.http.scaladsl.model.ws.{BinaryMessage, Message, TextMessage, UpgradeToWebSocket}
 import akka.http.scaladsl.server.Route
-import akka.stream.{ActorMaterializer, Graph, Materializer, SinkShape}
-import akka.stream.scaladsl.{Flow, Framing, Sink, Source, Tcp}
-import akka.stream.scaladsl.Tcp.{IncomingConnection, ServerBinding}
 import akka.util.{ByteString, Timeout}
-import akka.pattern.ask
 
 import scala.concurrent.{ExecutionContextExecutor, Future}
 import scala.concurrent.duration._
-import scala.io.StdIn
 import scala.collection.mutable
-import scala.util.{Failure, Success}
 
 object IOSocket {
 
   sealed trait Command extends CborSerializable
 
-  final case class BaseStationResponse(stations: mutable.Set[ActorRef[BaseStation.Command]]) extends Command
+  final case class BaseStationResponse(stations: Set[(String, Float, Float)]) extends Command
   final case class SetBaseManagerRef(ref: ActorRef[BaseManager.Command]) extends Command
 
   case class AdaptedResponse(res: mutable.Set[ActorRef[BaseStation.Command]]) extends Command
@@ -47,7 +39,7 @@ class IOSocket(context: ActorContext[IOSocket.Command]) extends AbstractBehavior
   implicit val ec: ExecutionContextExecutor = system.dispatcher
   implicit val timeout: Timeout = 3.second
   var baseManager: ActorRef[BaseManager.Command] = _
-  var baseStations: String = _
+  var baseStations: Set[(String, Float, Float)] = _
 
   val route: Route = concat (
     get {
@@ -66,7 +58,7 @@ class IOSocket(context: ActorContext[IOSocket.Command]) extends AbstractBehavior
 
   override def onMessage(msg: Command): Behavior[Command] = {
      msg match {
-       case BaseStationResponse(stations) => baseStations = stations.toString()
+       case BaseStationResponse(stations) => baseStations = stations
        case SetBaseManagerRef(ref) => baseManager = ref
      }
     Behaviors.same
@@ -75,5 +67,6 @@ class IOSocket(context: ActorContext[IOSocket.Command]) extends AbstractBehavior
   def getStations: Future[Option[(String, Float, Float)]] = {
     // TODO: get a list of stations from station managers -> managers should format information as needed
     Future.successful(Some(("http-test", 9000, 9001)))
+
   }
 }

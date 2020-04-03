@@ -3,10 +3,12 @@ package ie.ul.dronenet.actors
 import akka.actor.typed.{ActorRef, Behavior}
 import akka.actor.typed.receptionist.{Receptionist, ServiceKey}
 import akka.actor.typed.scaladsl.{AbstractBehavior, ActorContext, Behaviors}
-import akka.cluster.typed.ClusterSingleton
-import ie.ul.dronenet.DroneNetworkApp
+import akka.util.Timeout
 
+import scala.concurrent.duration._
 import scala.collection.mutable
+import scala.concurrent.{ExecutionContextExecutor, Future}
+import scala.util.{Failure, Success}
 
 object BaseManager {
 
@@ -20,7 +22,7 @@ object BaseManager {
   case class StationsResponse(stations: mutable.Set[ActorRef[BaseStation.Command]]) extends Command
 
   case class GetAllStations(sender: ActorRef[Response]) extends Command
-  case class Response(stations: mutable.Set[ActorRef[BaseStation.Command]])
+  case class Response(stations: Set[(String, Float, Float)])
 
   def apply(managerId: String): Behavior[Command] = {
     Behaviors.setup[Command](context => new BaseManager(context, managerId))
@@ -40,6 +42,9 @@ class BaseManager(context: ActorContext[BaseManager.Command], managerId: String)
 
   // Start BaseStation
   val baseStation: ActorRef[BaseStation.Command] = context.spawn(BaseStation(managerId, context.self), "BaseStation-" + managerId)
+  // val required for futures
+  implicit val timeout: Timeout = 3.seconds
+  implicit val ec: ExecutionContextExecutor = context.executionContext
 
   var ioSocket: Option[ActorRef[IOSocket.Command]] = None
   var base_station_listing: mutable.Set[ActorRef[BaseStation.Command]] = mutable.Set.empty
@@ -73,7 +78,22 @@ class BaseManager(context: ActorContext[BaseManager.Command], managerId: String)
             Behaviors.same
 
           case GetAllStations(sender) =>
-            sender ! Response(base_station_listing)
+//            sender ! Response(base_station_listing)
+            val stationFutures = Future.sequence( {
+              for(station <- base_station_listing) {
+                Future {
+                  context.ask(station, GetStationDetails) {
+                    case Success(value) => Future.successful(Adapter(value)) // do stuff and mark future as successful
+                    case Failure(ex) => _ // Do nothing (?) no response from the drone
+                  }
+                }
+              }
+            })
+
+            stationFutures.onComplete( {
+              case Success(value) => sender ! Response(value)
+            })
+
             Behaviors.same
         }
   }
