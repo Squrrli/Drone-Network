@@ -61,10 +61,6 @@ object Drone {
         droneManager ! DroneManager.DroneReady  // inform Manager that this Drone is ready
 
         running(context, droneId, droneManager)
-//        findBase(context, droneManager)
-//        context.log.info("-------------- Requesting BaseStation --------------")
-//        droneManager ! RequestBaseStation(0, context.self)
-//        Behaviors.same
     }
 
   private def running(context: ActorContext[Command], droneId: String, droneManager: ActorRef[DroneManager.Command]):Behavior[Command] =
@@ -81,11 +77,4 @@ object Drone {
         droneManager ! RequestBaseStation(0, context.self)
         Behaviors.same
     }
-
-  private def findBase(context: ActorContext[Command], manager: ActorRef[DroneManager.Command]):Behavior[Command] = {
-    StdIn.readLine()
-    context.log.info("-------------- Requesting BaseStation --------------")
-    manager ! RequestBaseStation(0, context.self)
-    Behaviors.same
-  }
 }

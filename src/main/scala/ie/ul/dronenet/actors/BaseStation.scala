@@ -10,24 +10,18 @@ import scala.collection.mutable
 
 object BaseStation {
   val BaseStationServiceKey: ServiceKey[Command] = ServiceKey[Command]("baseService")
-  val TypeKey: EntityTypeKey[Command] =
-    EntityTypeKey[Command]("Base")
-
-  val currentDrones: mutable.Set[ActorRef[Drone.Command]] = mutable.Set.empty[ActorRef[Drone.Command]]
-
-  def initSharding(system: ActorSystem[_]): Unit =
-    ClusterSharding(system).init(Entity(TypeKey) { entityContext =>
-      BaseStation(entityContext.entityId)
-    })
-
+  
   /* Drone Commands */
-  sealed trait Command
+  sealed trait Command extends CborSerializable
 
   final case object Ping extends Command
+
+  final case class BaseRequested(reqId: Long, drone: ActorRef[Drone.Command], initial: Boolean = true) extends Command
+
   case class RegisterDrone(drone: ActorRef[Drone.Command]) extends Command
   case class UnregisterDrone(drone: ActorRef[Drone.Command]) extends Command
 
-  def apply(baseId: String): Behavior[Command] =
+  def apply(baseId: String, manager: ActorRef[BaseManager.Command]): Behavior[Command] =
     Behaviors.setup[Command] {
       context =>
         context.log.info(s"Drone $baseId started")
@@ -37,16 +31,17 @@ object BaseStation {
     }
 
   private def running(context: ActorContext[Command], droneId: String):Behavior[Command] =
-    Behaviors.receiveMessage[Command] { message =>
-      message match {
+    Behaviors.receiveMessage[Command] {
         case Ping => context.log.info("Pinged!")
-        case RegisterDrone(drone) =>
-          currentDrones += drone
-          context.log.debug("currentDrone: {}", currentDrones)
-        case UnregisterDrone(drone) =>
-          if (currentDrones(drone)) currentDrones -= drone
-          context.log.debug("currentDrone: {}", currentDrones)
-      }
-      Behaviors.same
+          Behaviors.same
+        case BaseRequested(reqId, drone, initial) =>
+          context.log.info("BaseRequested by {}, reqId: {}", drone, reqId)
+          if(initial)
+            // wait for manual drone acceptance
+            context.log.info("Initial Drone BaseStation request - waiting for confirmation...\n (y)es / (n)o ?")
+          else
+            // autonomous selection
+            context.log.info("Drone BaseStation request - determining if should respond")
+          Behaviors.same
     }
 }

@@ -1,22 +1,36 @@
 package ie.ul.dronenet.actors
 
-import akka.NotUsed
-import akka.actor.typed.{ActorSystem, Behavior}
+import akka.{NotUsed, actor}
+import akka.actor.typed.{ActorRef, ActorSystem, Behavior}
 import akka.actor.typed.scaladsl.{AbstractBehavior, ActorContext, Behaviors}
+import akka.actor.typed.scaladsl.adapter._
 import akka.http.scaladsl.Http
-import akka.http.scaladsl.model.{HttpRequest, HttpResponse, Uri}
+import akka.http.scaladsl.server.Directives._
+import akka.http.scaladsl.model.{HttpRequest, HttpResponse, StatusCodes, Uri}
 import akka.http.scaladsl.model.HttpMethods._
 import akka.http.scaladsl.model.ws.{BinaryMessage, Message, TextMessage, UpgradeToWebSocket}
+import akka.http.scaladsl.server.Route
+import akka.stream.{ActorMaterializer, Graph, Materializer, SinkShape}
 import akka.stream.scaladsl.{Flow, Framing, Sink, Source, Tcp}
 import akka.stream.scaladsl.Tcp.{IncomingConnection, ServerBinding}
-import akka.util.ByteString
+import akka.util.{ByteString, Timeout}
+import akka.pattern.ask
 
 import scala.concurrent.{ExecutionContextExecutor, Future}
+import scala.concurrent.duration._
 import scala.io.StdIn
-
-sealed trait Command extends CborSerializable
+import scala.collection.mutable
+import scala.util.{Failure, Success}
 
 object IOSocket {
+
+  sealed trait Command extends CborSerializable
+
+  final case class BaseStationResponse(stations: mutable.Set[ActorRef[BaseStation.Command]]) extends Command
+  final case class SetBaseManagerRef(ref: ActorRef[BaseManager.Command]) extends Command
+
+  case class AdaptedResponse(res: mutable.Set[ActorRef[BaseStation.Command]]) extends Command
+
   def apply(): Behavior[Command] = Behaviors.setup(
     context => new IOSocket(context)
   )
@@ -26,51 +40,34 @@ object IOSocket {
  * Class to handle communication between frontend and Drone Network
  * Singleton actor through with all socket communication takes place.
  */
-class IOSocket(context: ActorContext[Command]) extends AbstractBehavior[Command](context) {
-  implicit val system: ActorSystem[Nothing] = context.system
-  implicit val ec: ExecutionContextExecutor = system.executionContext
+class IOSocket(context: ActorContext[IOSocket.Command]) extends AbstractBehavior[IOSocket.Command](context) {
+  import IOSocket._
 
-  val networkWebSocketService: Flow[Message, TextMessage, _] =
-    Flow[Message]
-      .mapConcat {
-        // we match but don't actually consume the text message here,
-        // rather we simply stream it back as the tail of the response
-        // this means we might start sending the response even before the
-        // end of the incoming message has been received
-        case tm: TextMessage => TextMessage(Source.single("Hello ") ++ tm.textStream) :: Nil
-        case bm: BinaryMessage =>
-          // ignore binary messages but drain content to avoid the stream being clogged
-          bm.dataStream.runWith(Sink.ignore)
-          Nil
-      }
+  implicit val system: actor.ActorSystem = context.system.toClassic
+  implicit val ec: ExecutionContextExecutor = system.dispatcher
+//  implicit val materialize: ActorMaterializer = ActorMaterializer()
+  implicit val timeout: Timeout = 3.second
+  var baseManager: ActorRef[BaseManager.Command] = _
+  var baseStations: String = _
 
-  val requestHandler: HttpRequest => HttpResponse = {
-    case req @ HttpRequest(GET, Uri.Path("/network"), _, _, _) =>
-      req.header[UpgradeToWebSocket] match {
-        case Some(upgrade) => upgrade.handleMessages(networkWebSocketService)
-        case None          => HttpResponse(400, entity = "Not a valid websocket request!")
-      }
-    case r: HttpRequest =>
-      r.discardEntityBytes() // important to drain incoming HTTP Entity stream
-      HttpResponse(404, entity = "Unknown resource!")
-  }
+//  val connections: Source[IncomingConnection, Future[ServerBinding]] =
+//    Tcp(system).bind("127.0.0.1", 8888)
+//  context.log.info("IOSocket started, listening at port 8888")
 
-  val bindingFuture: Future[Http.ServerBinding] =
-    Http(system).bindAndHandleSync(requestHandler, interface = "localhost", port = 8080)
-
-  println(s"Server online at http://localhost:8080/\nPress RETURN to stop...")
-  StdIn.readLine()
-
-  bindingFuture
-    .flatMap(_.unbind()) // trigger unbinding from the port
-    .onComplete(_ => system.terminate()) // and shutdown when done
-
-
-  //  val connections: Source[IncomingConnection, Future[ServerBinding]] =
-  //    Tcp(system).bind("127.0.0.1", 8888)
+  // set reference to BaseManager to allow for sending message and updating frontend
+//  def setBaseManagerRef(ref: ActorRef[BaseManager.Command]):Unit = baseManager = Some(ref)
 
 //  connections.runForeach { connection =>
 //    println(s"New connection from: ${connection.remoteAddress}")
+//
+//    val bsSource: Source[String, NotUsed] = Source.future {
+//        Future {
+//          context.ask(baseManager, BaseManager.GetAllStations) {
+//            case Success(BaseManager.Response(stations)) => BaseStationResponse(stations)
+//        }
+//          baseStations
+//      }
+//    }
 //
 //    val parser  = Flow[String].takeWhile(_ != "q").map(_ + "!")
 //
@@ -83,10 +80,43 @@ class IOSocket(context: ActorContext[Command]) extends AbstractBehavior[Command]
 //      .map(_.utf8String)
 //      .via(parser)
 //      .merge(welcome)
+//      .merge(bsSource)
 //      .map(ByteString(_))
 //
 //    connection.handleWith(echo)
 //  }
 
-  override def onMessage(msg: Command): Behavior[Command] = ???
+  val route: Route = concat (
+    get {
+      path("get-stations") {
+        val optStations: Future[Option[(String, Float, Float)]] = getStations
+
+        onSuccess(optStations) {
+          case Some(stationsList) => complete(stationsList.toString())
+          case None               => complete(StatusCodes.InternalServerError)
+        }
+      }
+    }
+  )
+
+  val bindingFuture: Future[Http.ServerBinding] = Http(system).bindAndHandle(route, "127.0.0.1", 8888)
+
+  override def onMessage(msg: Command): Behavior[Command] = {
+     msg match {
+       case BaseStationResponse(stations) => baseStations = stations.toString()
+       case SetBaseManagerRef(ref) => baseManager = ref
+     }
+    Behaviors.same
+  }
+
+  def getStations: Future[Option[(String, Float, Float)]] = {
+    // TODO: get a list of stations from station managers -> managers should format information as needed
+    Future.successful(Some(("http-test", 9000, 9001)))
+    val results = Future.sequence(
+      Seq {
+
+      }
+    )
+
+  }
 }

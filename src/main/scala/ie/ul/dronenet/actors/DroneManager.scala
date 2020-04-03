@@ -28,39 +28,41 @@ object DroneManager {
     Behaviors.setup[Command] { context =>
         val drone = context.spawn(Drone(managerId, context.self), "drone-" + managerId)
         val msgAdapterListingResponse = context.messageAdapter[Receptionist.Listing](ListingResponse)
-        val routerGroup: GroupRouter[BaseManager.Command] = Routers.group(BaseManager.BSManagerServiceKey)
         val router = context.spawn(routerGroup.withRoundRobinRouting(), "baseStationManager-group")
 
-        var managerNotReady: Boolean = true
+        var noInitialBaseStation: Boolean = true
+        var listingCtr: Int = 0
 
         // Register with local Receptionist and Subscribe to Listings of relevant ServiceKeys
         context.system.receptionist ! Receptionist.register(DroneManagerServiceKey, context.self)
         context.system.receptionist ! Receptionist.Subscribe(Drone.DroneServiceKey, msgAdapterListingResponse)
-//        context.system.receptionist ! Receptionist.Subscribe(BaseManager.BSManagerServiceKey, msgAdapterListingResponse)
+        context.system.receptionist ! Receptionist.Subscribe(BaseManager.BSManagerServiceKey, msgAdapterListingResponse)
 
         Behaviors.receiveMessage[Command] {
           case DroneReady =>
-            context.system.receptionist ! Receptionist.Find(BaseManager.BSManagerServiceKey, msgAdapterListingResponse)
+            context.log.debug("Drone ready message received")
+//            context.system.receptionist ! Receptionist.Find(BaseManager.BSManagerServiceKey, msgAdapterListingResponse)
             Behaviors.same
 
-          case receptionistListing: ListingResponse =>
-            receptionistListing.listing match {
-              case Drone.DroneServiceKey.Listing(listings) =>
-                context.log.debug("----- Drone.DroneServiceKey.Listing received -----")
-              case BaseManager.BSManagerServiceKey.Listing(listings) =>
-                context.log.debug("----- Drone.BSManagerServiceKey.Listing received -----")
-                listings.foreach(bm => context.log.debug("received BaseManager ActorRef from Receptionist: {}", bm.hashCode()))
-                if(managerNotReady) {
-                  drone ! Drone.ManagerReady
-                  managerNotReady = false
-                }
+          case ListingResponse(Drone.DroneServiceKey.Listing(listings)) =>
+            context.log.debug("Drone listings is empty: {}", listings.isEmpty)
+            listings.foreach(d => context.log.info("ListingResponse(DroneServiceKey): {}",d.hashCode()))
+            Behaviors.same
+
+          case ListingResponse(BaseManager.BSManagerServiceKey.Listing(listings)) =>
+            context.log.debug("{} - BaseManager listings is empty: {}", listingCtr, listings.isEmpty)
+            // get initial base station once listing has been populated
+            if(noInitialBaseStation && listingCtr > 0) {
+              noInitialBaseStation = false
+              router ! BaseManager.WrappedDroneManagerMsg(RequestBaseStation(0,drone))
             }
+            listingCtr = 1
             Behaviors.same
 
           case RequestBaseStation(reqId, drone) => // TODO: Restructure to ensure that Listing Set is always updated before requesting a BaseStation
             context.log.debug(s"RequestBaseStation: reqId{$reqId}")
-            router ! BaseManager.WrappedDroneManagerMsg(RequestBaseStation(reqId, drone))
-            context.log.debug(" --- post router ! WrappedDroneManagerMsg()")
+//            router ! BaseManager.WrappedDroneManagerMsg(RequestBaseStation(reqId, drone))
+//            context.log.debug(" --- post router ! WrappedDroneManagerMsg()")
             Behaviors.same
         }
     }
