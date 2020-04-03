@@ -45,46 +45,9 @@ class IOSocket(context: ActorContext[IOSocket.Command]) extends AbstractBehavior
 
   implicit val system: actor.ActorSystem = context.system.toClassic
   implicit val ec: ExecutionContextExecutor = system.dispatcher
-//  implicit val materialize: ActorMaterializer = ActorMaterializer()
   implicit val timeout: Timeout = 3.second
   var baseManager: ActorRef[BaseManager.Command] = _
   var baseStations: String = _
-
-//  val connections: Source[IncomingConnection, Future[ServerBinding]] =
-//    Tcp(system).bind("127.0.0.1", 8888)
-//  context.log.info("IOSocket started, listening at port 8888")
-
-  // set reference to BaseManager to allow for sending message and updating frontend
-//  def setBaseManagerRef(ref: ActorRef[BaseManager.Command]):Unit = baseManager = Some(ref)
-
-//  connections.runForeach { connection =>
-//    println(s"New connection from: ${connection.remoteAddress}")
-//
-//    val bsSource: Source[String, NotUsed] = Source.future {
-//        Future {
-//          context.ask(baseManager, BaseManager.GetAllStations) {
-//            case Success(BaseManager.Response(stations)) => BaseStationResponse(stations)
-//        }
-//          baseStations
-//      }
-//    }
-//
-//    val parser  = Flow[String].takeWhile(_ != "q").map(_ + "!")
-//
-//    import connection._
-//    val welcomeMsg = s"Welcome $remoteAddress, you are now connected to $localAddress"
-//    val welcome = Source.single(welcomeMsg)
-//
-//    val echo = Flow[ByteString]
-//      .via(Framing.delimiter(ByteString("\n"), maximumFrameLength = 256, allowTruncation = true))
-//      .map(_.utf8String)
-//      .via(parser)
-//      .merge(welcome)
-//      .merge(bsSource)
-//      .map(ByteString(_))
-//
-//    connection.handleWith(echo)
-//  }
 
   val route: Route = concat (
     get {
@@ -112,11 +75,5 @@ class IOSocket(context: ActorContext[IOSocket.Command]) extends AbstractBehavior
   def getStations: Future[Option[(String, Float, Float)]] = {
     // TODO: get a list of stations from station managers -> managers should format information as needed
     Future.successful(Some(("http-test", 9000, 9001)))
-    val results = Future.sequence(
-      Seq {
-
-      }
-    )
-
   }
 }
