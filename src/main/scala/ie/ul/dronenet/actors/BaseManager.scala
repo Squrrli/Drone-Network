@@ -1,8 +1,11 @@
 package ie.ul.dronenet.actors
 
+import akka.actor.{Scheduler, typed}
 import akka.actor.typed.{ActorRef, Behavior}
 import akka.actor.typed.receptionist.{Receptionist, ServiceKey}
-import akka.actor.typed.scaladsl.{AbstractBehavior, ActorContext, Behaviors}
+import akka.actor.typed.scaladsl.AskPattern.Askable
+import akka.actor.typed.scaladsl.{AbstractBehavior, ActorContext, AskPattern, Behaviors}
+import akka.pattern.AskableActorRef
 import akka.util.Timeout
 
 import scala.concurrent.duration._
@@ -20,9 +23,12 @@ object BaseManager {
   case class WrappedDroneManagerMsg(msg: DroneManager.Command) extends Command
   case class SetIOSocket(ref: ActorRef[IOSocket.Command]) extends Command
   case class StationsResponse(stations: mutable.Set[ActorRef[BaseStation.Command]]) extends Command
+  case class BaseDetailsResAdapter(details: (String, Float, Float)) extends Command
 
-  case class GetAllStations(sender: ActorRef[Response]) extends Command
-  case class Response(stations: Set[(String, Float, Float)])
+  case class GetAllStations(sender: ActorRef[IOSocket.Command]) extends Command
+  case class DetailsResponse(stations: List[(String, Float, Float)], sender: ActorRef[IOSocket.Command]) extends Command
+
+  case object ResFailed extends Command
 
   def apply(managerId: String): Behavior[Command] = {
     Behaviors.setup[Command](context => new BaseManager(context, managerId))
@@ -45,6 +51,7 @@ class BaseManager(context: ActorContext[BaseManager.Command], managerId: String)
   // val required for futures
   implicit val timeout: Timeout = 3.seconds
   implicit val ec: ExecutionContextExecutor = context.executionContext
+  implicit val scheduler: typed.Scheduler = context.system.scheduler
 
   var ioSocket: Option[ActorRef[IOSocket.Command]] = None
   var base_station_listing: mutable.Set[ActorRef[BaseStation.Command]] = mutable.Set.empty
@@ -77,23 +84,21 @@ class BaseManager(context: ActorContext[BaseManager.Command], managerId: String)
             socket ! IOSocket.SetBaseManagerRef(context.self)
             Behaviors.same
 
-          case GetAllStations(sender) =>
-//            sender ! Response(base_station_listing)
-            val stationFutures = Future.sequence( {
-              for(station <- base_station_listing) {
-                Future {
-                  context.ask(station, GetStationDetails) {
-                    case Success(value) => Future.successful(Adapter(value)) // do stuff and mark future as successful
-                    case Failure(ex) => _ // Do nothing (?) no response from the drone
-                  }
-                }
-              }
-            })
+          case GetAllStations(sender) => {
+            var futures: List[Future[(String, Float, Float)]] = List.empty
+            for(station <- base_station_listing) {
+              val f: Future[(String, Float, Float)] = new Askable(station) ? BaseStation.GetBaseDetails
+              f :: futures
+            }
+            var stationFutures = Future.sequence (futures)
 
-            stationFutures.onComplete( {
-              case Success(value) => sender ! Response(value)
-            })
-
+            context.pipeToSelf(stationFutures) {
+              case Success(vals) => DetailsResponse(vals, sender)
+            }
+            Behaviors.same
+          }
+          case DetailsResponse(stations, sender) =>
+            sender ! IOSocket.BaseStationResponse(stations)
             Behaviors.same
         }
   }
