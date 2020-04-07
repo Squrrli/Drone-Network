@@ -4,7 +4,8 @@ import akka.actor.{Scheduler, typed}
 import akka.actor.typed.{ActorRef, Behavior}
 import akka.actor.typed.receptionist.{Receptionist, ServiceKey}
 import akka.actor.typed.scaladsl.AskPattern.Askable
-import akka.actor.typed.scaladsl.{AbstractBehavior, ActorContext, AskPattern, Behaviors}
+import akka.actor.typed.scaladsl.{AbstractBehavior, ActorContext, Behaviors}
+import akka.actor.typed.scaladsl.AskPattern._
 import akka.pattern.AskableActorRef
 import akka.util.Timeout
 
@@ -18,15 +19,18 @@ object BaseManager {
   val BSManagerServiceKey: ServiceKey[Command] = ServiceKey[Command]("baseManagerService")
 
   sealed trait Command extends CborSerializable
+  sealed trait Response extends CborSerializable
 
   private case class ListingResponse(listing: Receptionist.Listing) extends Command
   case class WrappedDroneManagerMsg(msg: DroneManager.Command) extends Command
   case class SetIOSocket(ref: ActorRef[IOSocket.Command]) extends Command
-  case class StationsResponse(stations: mutable.Set[ActorRef[BaseStation.Command]]) extends Command
-  case class BaseDetailsResAdapter(details: (String, Float, Float)) extends Command
 
-  case class GetAllStations(sender: ActorRef[IOSocket.Command]) extends Command
-  case class DetailsResponse(stations: List[(String, Float, Float)], sender: ActorRef[IOSocket.Command]) extends Command
+  case class StationsResponse(stations: mutable.Set[ActorRef[BaseStation.Command]]) extends Command
+//  case class BaseDetailsResAdapter(details: (String, Float, Float)) extends Command
+
+  case class GetAllStations(replyTo: ActorRef[Response]) extends Command
+  case class AllDetailsResponse(stations: List[(String, Float, Float)]) extends Response
+  case class BaseDetailsResAdapter(responses: List[BaseStation.Response]) extends Command
 
   case object ResFailed extends Command
 
@@ -84,22 +88,22 @@ class BaseManager(context: ActorContext[BaseManager.Command], managerId: String)
             socket ! IOSocket.SetBaseManagerRef(context.self)
             Behaviors.same
 
-          case GetAllStations(sender) => {
-            var futures: List[Future[(String, Float, Float)]] = List.empty
-            for(station <- base_station_listing) {
-              val f: Future[(String, Float, Float)] = new Askable(station) ? BaseStation.GetBaseDetails
-              f :: futures
-            }
-            var stationFutures = Future.sequence (futures)
+          case GetAllStations(replyTo) => {
+            val futures: List[Future[BaseStation.DetailsResponse]] = base_station_listing.toList.map( station => {
+              val f: Future[BaseStation.Response] = station.ask(ref => BaseStation.GetBaseDetails(ref))
+              f.mapTo[BaseStation.DetailsResponse]
+            })
 
-            context.pipeToSelf(stationFutures) {
-              case Success(vals) => DetailsResponse(vals, sender)
+            Future.sequence(futures).onComplete {
+              case Success(responses) => // details = List[Response]
+                val mapped = responses.map(res => Tuple3(res.details._1, res.details._2, res.details._3))
+                context.log.info("replying to IOSocket")
+                context.log.info("\n\n\n" + mapped + "\n\n")
+                replyTo ! AllDetailsResponse(mapped)
+              case Failure(_) => context.log.error("something went wrong while getting futures")
             }
             Behaviors.same
           }
-          case DetailsResponse(stations, sender) =>
-            sender ! IOSocket.BaseStationResponse(stations)
-            Behaviors.same
         }
   }
 }

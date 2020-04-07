@@ -13,10 +13,13 @@ object BaseStation {
   
   /* Drone Commands */
   sealed trait Command extends CborSerializable
+  sealed trait Response extends CborSerializable
 
   final case object Ping extends Command
 
   final case class BaseRequested(reqId: Long, drone: ActorRef[Drone.Command], initial: Boolean = true) extends Command
+  case class GetBaseDetails(replyTo: ActorRef[Response]) extends Command
+  case class DetailsResponse(details: (String, Float, Float)) extends Response
 
   case class RegisterDrone(drone: ActorRef[Drone.Command]) extends Command
   case class UnregisterDrone(drone: ActorRef[Drone.Command]) extends Command
@@ -42,6 +45,11 @@ object BaseStation {
           else
             // autonomous selection
             context.log.info("Drone BaseStation request - determining if should respond")
+          Behaviors.same
+        case GetBaseDetails(replyTo) =>
+          context.log.info("\n---------------- BaseDetailsRequested ---------------\n")
+          val res: (String, Float, Float) = ("hello", 2, 2)
+          replyTo ! DetailsResponse(res)
           Behaviors.same
     }
 }
