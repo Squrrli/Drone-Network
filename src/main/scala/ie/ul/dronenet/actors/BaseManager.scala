@@ -28,7 +28,7 @@ object BaseManager {
   case class StationsResponse(stations: mutable.Set[ActorRef[BaseStation.Command]]) extends Command
 //  case class BaseDetailsResAdapter(details: (String, Float, Float)) extends Command
 
-  case class GetAllStations(replyTo: ActorRef[Response]) extends Command
+  case class GetAllStations(replyTo: ActorRef[AllDetailsResponse]) extends Command
   case class AllDetailsResponse(stations: List[(String, Float, Float)]) extends Response
   case class BaseDetailsResAdapter(responses: List[BaseStation.Response]) extends Command
 
@@ -95,7 +95,7 @@ class BaseManager(context: ActorContext[BaseManager.Command], managerId: String)
             })
 
             Future.sequence(futures).onComplete {
-              case Success(responses) => // details = List[Response]
+              case Success(responses) =>
                 val mapped = responses.map(res => Tuple3(res.details._1, res.details._2, res.details._3))
                 context.log.info("replying to IOSocket")
                 context.log.info("\n\n\n" + mapped + "\n\n")

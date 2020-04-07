@@ -1,24 +1,27 @@
 package ie.ul.dronenet.actors
 
+import akka.actor.typed
 import akka.{NotUsed, actor}
-import akka.actor.typed.{ActorRef, ActorSystem, Behavior}
+import akka.actor.typed.{ActorRef, ActorSystem, Behavior, Scheduler}
 import akka.actor.typed.scaladsl.{AbstractBehavior, ActorContext, Behaviors}
 import akka.actor.typed.scaladsl.adapter._
+import akka.actor.typed.scaladsl.AskPattern._
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.server.Directives._
 import akka.http.scaladsl.model.{HttpRequest, HttpResponse, StatusCodes, Uri}
 import akka.http.scaladsl.server.Route
 import akka.util.{ByteString, Timeout}
 
-import scala.concurrent.{ExecutionContextExecutor, Future}
+import scala.concurrent.{Await, ExecutionContextExecutor, Future}
 import scala.concurrent.duration._
 import scala.collection.mutable
+import scala.util.{Failure, Success}
 
 object IOSocket {
 
   sealed trait Command extends CborSerializable
 
-  final case class BaseStationResponse(stations: Set[(String, Float, Float)]) extends Command
+  final case class BaseStationResponse(stations: List[(String, Float, Float)]) extends Command
   final case class SetBaseManagerRef(ref: ActorRef[BaseManager.Command]) extends Command
 
   case class AdaptedResponse(res: mutable.Set[ActorRef[BaseStation.Command]]) extends Command
@@ -38,13 +41,14 @@ class IOSocket(context: ActorContext[IOSocket.Command]) extends AbstractBehavior
   implicit val system: actor.ActorSystem = context.system.toClassic
   implicit val ec: ExecutionContextExecutor = system.dispatcher
   implicit val timeout: Timeout = 3.second
+  implicit val scheduler: Scheduler = context.system.scheduler
   var baseManager: ActorRef[BaseManager.Command] = _
-  var baseStations: Set[(String, Float, Float)] = _
+  var baseStations: List[(String, Float, Float)] = _
 
   val route: Route = concat (
     get {
       path("get-stations") {
-        val optStations: Future[Option[(String, Float, Float)]] = getStations
+        val optStations: Future[Option[List[(String, Float, Float)]]] = getStations
 
         onSuccess(optStations) {
           case Some(stationsList) => complete(stationsList.toString())
@@ -64,9 +68,8 @@ class IOSocket(context: ActorContext[IOSocket.Command]) extends AbstractBehavior
     Behaviors.same
   }
 
-  def getStations: Future[Option[(String, Float, Float)]] = {
-    // TODO: get a list of stations from station managers -> managers should format information as needed
-    Future.successful(Some(("http-test", 9000, 9001)))
-
+  def getStations: Future[Option[List[(String, Float, Float)]]] = {
+      val f: Future[BaseManager.AllDetailsResponse] = baseManager.ask(ref => BaseManager.GetAllStations(ref))
+      f.map(res => Some(res.stations))
   }
 }
