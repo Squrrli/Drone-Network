@@ -19,7 +19,7 @@ object DroneNetworkApp {
    */
   object RootBehavior {
     def apply(): Behavior[Any] = Behaviors.setup[Any] { context =>
-
+      val actorConfig = context.system.settings.config
 
       val singletonManager = ClusterSingleton(context.system)
       // Start if needed and provide a proxy to a named singleton
@@ -29,15 +29,25 @@ object DroneNetworkApp {
 
       // Create an actor that handles cluster domain events
       context.spawn(ClusterListener(), "ClusterListener")
-//      context.spawn(IOSocket(), "IOSocket")
 
       // Spawn desired actors depending on the current Node's role
       val selfMember = Cluster(context.system).selfMember
       if (selfMember.hasRole("Drone")) {
-        val droneManager = context.spawn(DroneManager("testDroneManager1"), "DroneManager")
-//        context.spawn(Drone("testDroneManager1", droneManager), "Drone")
+        val name = actorConfig.getAnyRef("drone.name").toString
+        val dtype = actorConfig.getAnyRef("drone.type").toString
+        val range = actorConfig.getDouble("drone.range")
+        val maxWeight = actorConfig.getDouble("drone.max-weight")
+
+        val droneManager = context.spawn(DroneManager(name, dtype, range, maxWeight), name+"-manager")
+
       } else if (selfMember.hasRole("Base")) {
-        val baseManager = context.spawn(BaseManager("testBaseManager1"), "BSManager")
+        val name = actorConfig.getAnyRef("base-station.name").toString
+        val cap = actorConfig.getDouble("base-station.max-capacity")
+        val latlng = Seq(
+          actorConfig.getDouble("base-station.loc.lat"),
+          actorConfig.getDouble("base-station.loc.lng")
+        )
+        val baseManager = context.spawn(BaseManager(name, cap, latlng), name+"-manager")
         baseManager ! BaseManager.SetIOSocket(proxy)
       }
       Behaviors.same
@@ -46,26 +56,23 @@ object DroneNetworkApp {
 
   var ioSocket: Option[ActorRef[IOSocket.Command]] = None
 
-  // TODO: remove multiple systems on single JVM in future release
   def main(args: Array[String]): Unit = {
     val ports =
       if (args.isEmpty)
-        Seq(25251, 25252, 0)
+        Seq(25251)
       else
         args.toSeq.map(_.toInt)
     ports.foreach(startup)
   }
 
-  def chooseDrone(model: String, df: String): String = Seq("minizinc", model, df).!!
+  def chooseDrone(model: String, dataFile: String): String = Seq("minizinc", model, dataFile).!!
 
-  // Start new cluster node for each of the given ports
   def startup(port: Int): Unit = {
     // Override the configuration of the port
     val config = ConfigFactory.parseString(s"""
       akka.remote.artery.canonical.port=$port
       """).withFallback(ConfigFactory.load())
 
-    // Create an Akka system
     val system: ActorSystem[Any] = ActorSystem(RootBehavior(), "ClusterSystem", config)
   }
 }

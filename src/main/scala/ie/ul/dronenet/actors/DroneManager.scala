@@ -24,9 +24,9 @@ object DroneManager {
 
   final case class RequestBaseStation(reqId: Long, drone: ActorRef[Drone.Command]) extends Command
 
-  def apply(managerId: String): Behavior[Command] = {
+  def apply(droneName: String, dType: String, range: Double, maxWeight: Double): Behavior[Command] = {
     Behaviors.setup[Command] { context =>
-        val drone = context.spawn(Drone(managerId, context.self), "drone-" + managerId)
+        val drone = context.spawn(Drone(droneName, dType, range, maxWeight, context.self), droneName+"-manager")
         val msgAdapterListingResponse = context.messageAdapter[Receptionist.Listing](ListingResponse)
         val router = context.spawn(routerGroup.withRoundRobinRouting(), "baseStationManager-group")
 
@@ -69,6 +69,6 @@ object DroneManager {
   }
 }
 
-class DroneManager(context: ActorContext[DroneManager.Command]) extends AbstractBehavior[DroneManager.Command](context) {
+class DroneManager(context: ActorContext[DroneManager.Command], dtype: String, range: Double, maxWeight: Double) extends AbstractBehavior[DroneManager.Command](context) {
   override def onMessage(msg: DroneManager.Command): Behavior[DroneManager.Command] = ???
 }

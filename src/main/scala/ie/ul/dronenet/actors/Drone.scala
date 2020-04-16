@@ -49,10 +49,13 @@ object Drone {
   /**
    * Override of apply() method for instantiating Actor
    * @param droneId String ID of this Drone
+   * @param dType type of drone e.g. Quad, Hex, Fixed
+   * @param range max flight range of drone
+   * @param maxWeight max carry weight range of drone
    * @param droneManager DroneManager Actor that facilitates actor discovery across the cluster for this Drone actor
    * @return Behavior[Drone.Command]
    */
-  def apply(droneId: String, droneManager: ActorRef[DroneManager.Command]): Behavior[Command] =
+  def apply(droneId: String, dType: String, range: Double, maxWeight: Double, droneManager: ActorRef[DroneManager.Command]): Behavior[Command] =
     Behaviors.setup[Command] {
       context =>
         context.log.info(s"Drone $droneId started")
