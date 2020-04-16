@@ -24,7 +24,7 @@ object BaseStation {
   case class RegisterDrone(drone: ActorRef[Drone.Command]) extends Command
   case class UnregisterDrone(drone: ActorRef[Drone.Command]) extends Command
 
-  def apply(baseId: String, manager: ActorRef[BaseManager.Command]): Behavior[Command] =
+  def apply(baseId: String, manager: ActorRef[BaseManager.Command], capacity: Double, latlng: Seq[Double]): Behavior[Command] =
     Behaviors.setup[Command] {
       context =>
         context.log.info(s"Drone $baseId started")

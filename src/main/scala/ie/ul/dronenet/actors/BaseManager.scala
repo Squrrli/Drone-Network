@@ -34,15 +34,16 @@ object BaseManager {
 
   case object ResFailed extends Command
 
-  def apply(managerId: String): Behavior[Command] = {
-    Behaviors.setup[Command](context => new BaseManager(context, managerId))
+  def apply(managerId: String, capacity: Double, latlng: Seq[Double]): Behavior[Command] = {
+    Behaviors.setup[Command](context => new BaseManager(context, managerId, capacity, latlng))
   }
 }
 
-class BaseManager(context: ActorContext[BaseManager.Command], managerId: String) extends AbstractBehavior[BaseManager.Command](context) {
+class BaseManager(context: ActorContext[BaseManager.Command], baseName: String, capacity: Double, latlng: Seq[Double])
+  extends AbstractBehavior[BaseManager.Command](context) {
   import BaseManager._
 
-  context.log.debug("{} started...", managerId)
+  context.log.debug("{} started @ {}...", baseName, latlng)
   val listingAdapter: ActorRef[Receptionist.Listing] = context.messageAdapter[Receptionist.Listing](ListingResponse)
 
   // Register with local Receptionist and Subscribe to relevant Listings
@@ -51,7 +52,7 @@ class BaseManager(context: ActorContext[BaseManager.Command], managerId: String)
   context.system.receptionist ! Receptionist.Subscribe(DroneManager.DroneManagerServiceKey, listingAdapter)
 
   // Start BaseStation
-  val baseStation: ActorRef[BaseStation.Command] = context.spawn(BaseStation(managerId, context.self), "BaseStation-" + managerId)
+  val baseStation: ActorRef[BaseStation.Command] = context.spawn(BaseStation(baseName, context.self, capacity, latlng), baseName)
   // val required for futures
   implicit val timeout: Timeout = 3.seconds
   implicit val ec: ExecutionContextExecutor = context.executionContext
