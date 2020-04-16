@@ -15,7 +15,8 @@ import akka.util.{ByteString, Timeout}
 import scala.concurrent.{Await, ExecutionContextExecutor, Future}
 import scala.concurrent.duration._
 import scala.collection.mutable
-import scala.util.{Failure, Success}
+import spray.json._
+import DefaultJsonProtocol._
 
 object IOSocket {
 
@@ -51,7 +52,7 @@ class IOSocket(context: ActorContext[IOSocket.Command]) extends AbstractBehavior
         val optStations: Future[Option[List[(String, Float, Float)]]] = getStations
 
         onSuccess(optStations) {
-          case Some(stationsList) => complete(stationsList.toString())
+          case Some(stationsList) => complete(stationsList.toJson.toString())
           case None               => complete(StatusCodes.InternalServerError)
         }
       }

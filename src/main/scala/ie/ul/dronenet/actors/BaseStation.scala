@@ -30,10 +30,10 @@ object BaseStation {
         context.log.info(s"Drone $baseId started")
         // Register Drone with local Receptionist to allow drone be discovered from across the Cluster
         context.system.receptionist ! Receptionist.register(BaseStationServiceKey, context.self)
-        running(context, baseId)
+        running(context, baseId, capacity, latlng)
     }
 
-  private def running(context: ActorContext[Command], droneId: String):Behavior[Command] =
+  private def running(context: ActorContext[Command], baseId: String, capacity: Double, latlng: Seq[Double]):Behavior[Command] =
     Behaviors.receiveMessage[Command] {
         case Ping => context.log.info("Pinged!")
           Behaviors.same
@@ -47,8 +47,9 @@ object BaseStation {
             context.log.info("Drone BaseStation request - determining if should respond")
           Behaviors.same
         case GetBaseDetails(replyTo) =>
+
           context.log.info("\n---------------- BaseDetailsRequested ---------------\n")
-          val res: (String, Float, Float) = ("hello", 2, 2)
+          val res: (String, Float, Float) = (baseId, latlng.head.asInstanceOf[Float], latlng(1).asInstanceOf[Float])
           replyTo ! DetailsResponse(res)
           Behaviors.same
     }
