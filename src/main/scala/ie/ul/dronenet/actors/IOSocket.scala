@@ -16,13 +16,14 @@ import scala.concurrent.{Await, ExecutionContextExecutor, Future}
 import scala.concurrent.duration._
 import scala.collection.mutable
 import spray.json._
+import ch.megard.akka.http.cors.scaladsl.CorsDirectives._
 import DefaultJsonProtocol._
 
 object IOSocket {
 
   sealed trait Command extends CborSerializable
 
-  final case class BaseStationResponse(stations: List[(String, Float, Float)]) extends Command
+  final case class BaseStationResponse(stations: List[(String, Double, Double)]) extends Command
   final case class SetBaseManagerRef(ref: ActorRef[BaseManager.Command]) extends Command
 
   case class AdaptedResponse(res: mutable.Set[ActorRef[BaseStation.Command]]) extends Command
@@ -44,15 +45,17 @@ class IOSocket(context: ActorContext[IOSocket.Command]) extends AbstractBehavior
   implicit val timeout: Timeout = 3.second
   implicit val scheduler: Scheduler = context.system.scheduler
   var baseManager: ActorRef[BaseManager.Command] = _
-  var baseStations: List[(String, Float, Float)] = _
+  var baseStations: List[(String, Double, Double)] = _
 
-  val route: Route = concat (
+  val route: Route = cors() (
     get {
       path("get-stations") {
-        val optStations: Future[Option[List[(String, Float, Float)]]] = getStations
+        val optStations: Future[Option[List[(String, Double, Double)]]] = getStations
 
         onSuccess(optStations) {
-          case Some(stationsList) => complete(stationsList.toJson.toString())
+          case Some(stationsList) =>
+            context.log.debug(stationsList.toString())
+            complete(stationsList.toJson.toString())
           case None               => complete(StatusCodes.InternalServerError)
         }
       }
@@ -69,7 +72,7 @@ class IOSocket(context: ActorContext[IOSocket.Command]) extends AbstractBehavior
     Behaviors.same
   }
 
-  def getStations: Future[Option[List[(String, Float, Float)]]] = {
+  def getStations: Future[Option[List[(String, Double, Double)]]] = {
       val f: Future[BaseManager.AllDetailsResponse] = baseManager.ask(ref => BaseManager.GetAllStations(ref))
       f.map(res => Some(res.stations))
   }

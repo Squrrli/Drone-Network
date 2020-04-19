@@ -16,6 +16,7 @@ libraryDependencies ++= Seq(
   "com.typesafe.akka" %% "akka-serialization-jackson" % akkaVersion,
   "ch.qos.logback"    %  "logback-classic"             % "1.2.3",
   "io.spray"          %%  "spray-json"                 % "1.3.5",
+  "ch.megard"         %% "akka-http-cors"              % "0.4.2",
   "com.typesafe.akka" %% "akka-multi-node-testkit"    % akkaVersion % Test,
   "org.scalatest"     %% "scalatest"                  % "3.0.8"     % Test,
   "com.typesafe.akka" %% "akka-actor-testkit-typed"   % akkaVersion % Test

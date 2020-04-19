@@ -29,7 +29,7 @@ object BaseManager {
 //  case class BaseDetailsResAdapter(details: (String, Float, Float)) extends Command
 
   case class GetAllStations(replyTo: ActorRef[AllDetailsResponse]) extends Command
-  case class AllDetailsResponse(stations: List[(String, Float, Float)]) extends Response
+  case class AllDetailsResponse(stations: List[(String, Double, Double)]) extends Response
   case class BaseDetailsResAdapter(responses: List[BaseStation.Response]) extends Command
 
   case object ResFailed extends Command
