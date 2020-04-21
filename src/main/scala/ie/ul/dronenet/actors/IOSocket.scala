@@ -62,7 +62,7 @@ class IOSocket(context: ActorContext[IOSocket.Command]) extends AbstractBehavior
     }
   )
 
-  val bindingFuture: Future[Http.ServerBinding] = Http(system).bindAndHandle(route, "127.0.0.1", 8888)
+  val bindingFuture: Future[Http.ServerBinding] = Http(system).bindAndHandle(route, "0.0.0.0", 8888)
 
   override def onMessage(msg: Command): Behavior[Command] = {
      msg match {
