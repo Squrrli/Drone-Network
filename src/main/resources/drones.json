@@ -1,7 +1,5 @@
 {
     "n": 2,
-    "distance": 450.00,
-    "weight": 100.00,
     "drone_attr": [ {"e": "Range"}, {"e": "Capacity"} ],
     "drones": [
 	[1500.00, 250.00],
