@@ -25,6 +25,8 @@ object BaseStation {
   case class GetBaseDetails(replyTo: ActorRef[Response]) extends Command
   case class DetailsResponse(details: (String, Double, Double)) extends Response
 
+  case class RemoveDeadDrones(listing: Set[ActorRef[DroneManager.Command]]) // TODO: Finish implementing removal of drones
+
   case class RegisterDrone(drone: ActorRef[Drone.Command]) extends Command
   case class UnregisterDrone(drone: ActorRef[Drone.Command]) extends Command
 
