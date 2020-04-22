@@ -69,6 +69,6 @@ object DroneManager {
   }
 }
 
-class DroneManager(context: ActorContext[DroneManager.Command], dtype: String, range: Double, maxWeight: Double) extends AbstractBehavior[DroneManager.Command](context) {
+class DroneManager(context: ActorContext[DroneManager.Command], dType: String, range: Double, maxWeight: Double) extends AbstractBehavior[DroneManager.Command](context) {
   override def onMessage(msg: DroneManager.Command): Behavior[DroneManager.Command] = ???
 }

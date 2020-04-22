@@ -22,6 +22,7 @@ object Drone {
   final case class RegisterBaseStation(replyTo: ActorRef[Response]) extends Command
 
   final case object RegisterResponse extends Response
+  final case object NoRegisterResponse extends Response
 
   def apply(droneId: String, dType: String, range: Double, maxWeight: Double, droneManager: ActorRef[DroneManager.Command]): Behavior[Command] =
     Behaviors.setup[Command] {
@@ -43,19 +44,11 @@ object Drone {
 
    override def onMessage(msg: Drone.Command): Behavior[Drone.Command] = {
      msg match {
-       case Ping =>
-         context.log.info("Pinged!")
-         Behaviors.same
        case RegisterBaseStation(baseStation) =>
          context.log.info("BS asking to register...")
-         if(!registeredToBase)
-           baseStation ! RegisterResponse
+         if(!registeredToBase)  baseStation ! RegisterResponse
+         else                   baseStation ! NoRegisterResponse
          Behaviors.same
-//
-//       case ManagerReady =>
-//         context.log.info("-------------- Requesting BaseStation --------------")
-//         droneManager ! RequestBaseStation(0, context.self)
-//         Behaviors.same
      }
    }
  }

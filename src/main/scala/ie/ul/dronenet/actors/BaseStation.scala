@@ -1,17 +1,21 @@
 package ie.ul.dronenet.actors
 
+import akka.actor.typed
 import akka.actor.typed.receptionist.{Receptionist, ServiceKey}
 import akka.actor.typed.{ActorRef, ActorSystem, Behavior, receptionist}
 import akka.actor.typed.scaladsl.{AbstractBehavior, ActorContext, Behaviors}
 import akka.cluster.sharding.typed.scaladsl.{ClusterSharding, Entity, EntityTypeKey}
 
+import scala.concurrent.{ExecutionContextExecutor, Future}
+import akka.actor.typed.scaladsl.AskPattern._
+import akka.util.Timeout
 import scala.collection.mutable
+import scala.concurrent.duration._
 
 
 object BaseStation {
   val BaseStationServiceKey: ServiceKey[Command] = ServiceKey[Command]("baseService")
-  
-  /* Drone Commands */
+
   sealed trait Command extends CborSerializable
   sealed trait Response extends CborSerializable
 
@@ -26,30 +30,43 @@ object BaseStation {
 
   def apply(baseId: String, manager: ActorRef[BaseManager.Command], capacity: Double, latlng: Seq[Double]): Behavior[Command] =
     Behaviors.setup[Command] {
-      context =>
-        context.log.info(s"Drone $baseId started")
-        // Register Drone with local Receptionist to allow drone be discovered from across the Cluster
-        context.system.receptionist ! Receptionist.register(BaseStationServiceKey, context.self)
-        running(context, baseId, capacity, latlng)
+      context => new BaseStation(context, baseId, manager, capacity, latlng)
     }
+}
 
-  private def running(context: ActorContext[Command], baseId: String, capacity: Double, latlng: Seq[Double]):Behavior[Command] =
-    Behaviors.receiveMessage[Command] {
-        case Ping => context.log.info("Pinged!")
-          Behaviors.same
-        case BaseRequested(reqId, drone, initial) =>
-          context.log.info("BaseRequested by {}, reqId: {}", drone, reqId)
-          if(initial)
-            // wait for manual drone acceptance
-            context.log.info("Initial Drone BaseStation request - waiting for confirmation...\n (y)es / (n)o ?")
-          else
-            // autonomous selection
-            context.log.info("Drone BaseStation request - determining if should respond")
-          Behaviors.same
-        case GetBaseDetails(replyTo) =>
-          context.log.info("\n---------------- BaseDetailsRequested ---------------\n")
-          val res: (String, Double, Double) = (baseId, latlng.head, latlng(1))
-          replyTo ! DetailsResponse(res)
-          Behaviors.same
+class BaseStation(context: ActorContext[BaseStation.Command], baseId: String, manager: ActorRef[BaseManager.Command], capacity: Double, latlng: Seq[Double])
+  extends AbstractBehavior[BaseStation.Command](context) {
+  import BaseStation._
+
+  context.log.info(s"Drone $baseId started")
+  // Register Drone with local Receptionist to allow drone be discovered from across the Cluster
+  context.system.receptionist ! Receptionist.register(BaseStationServiceKey, context.self)
+
+  implicit val timeout: Timeout = 3.seconds
+  implicit val ec: ExecutionContextExecutor = context.executionContext
+  implicit val scheduler: typed.Scheduler = context.system.scheduler
+
+  private var registeredDrones: mutable.Set[ActorRef[Drone.Command]] = mutable.Set.empty
+
+  override def onMessage(msg: BaseStation.Command): Behavior[BaseStation.Command] = {
+    msg match {
+      case BaseRequested(reqId, drone, initial) => // TODO: refactor to not need initial param
+        context.log.info("BaseRequested by {}, reqId: {}", drone, reqId)
+        val futureRegister: Future[Drone.Response] = drone.ask(ref => Drone.RegisterBaseStation(ref))
+        futureRegister.map {
+          case Drone.RegisterResponse =>
+            context.log.debug(s"Register Drone ${drone.path} @ ${context.self.path}")
+            registeredDrones.add(drone)
+          case Drone.NoRegisterResponse =>
+            context.log.debug(s"Drone not registered @ ${context.self.path}")
+        }
+        Behaviors.same
+
+      case GetBaseDetails(replyTo) =>
+        context.log.info("\n---------------- BaseDetailsRequested ---------------\n")
+        val res: (String, Double, Double) = (baseId, latlng.head, latlng(1))
+        replyTo ! DetailsResponse(res)
+        Behaviors.same
     }
+  }
 }
