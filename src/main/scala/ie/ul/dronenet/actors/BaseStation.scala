@@ -46,20 +46,24 @@ class BaseStation(context: ActorContext[BaseStation.Command], baseId: String, ma
   implicit val ec: ExecutionContextExecutor = context.executionContext
   implicit val scheduler: typed.Scheduler = context.system.scheduler
 
-  private var registeredDrones: mutable.Set[ActorRef[Drone.Command]] = mutable.Set.empty
+  private val registeredDrones: mutable.Set[ActorRef[Drone.Command]] = mutable.Set()
 
   override def onMessage(msg: BaseStation.Command): Behavior[BaseStation.Command] = {
     msg match {
       case BaseRequested(reqId, drone, initial) => // TODO: refactor to not need initial param
         context.log.info("BaseRequested by {}, reqId: {}", drone, reqId)
-        val futureRegister: Future[Drone.Response] = drone.ask(ref => Drone.RegisterBaseStation(ref))
-        futureRegister.map {
-          case Drone.RegisterResponse =>
-            context.log.debug(s"Register Drone ${drone.path} @ ${context.self.path}")
-            registeredDrones.add(drone)
-          case Drone.NoRegisterResponse =>
-            context.log.debug(s"Drone not registered @ ${context.self.path}")
-        }
+        context.log.info("\nCAPACITY: {}, registered: {}\n", capacity, registeredDrones.size)
+
+//        if(registeredDrones.size < capacity) {
+          val futureRegister: Future[Drone.Response] = drone.ask(ref => Drone.RegisterBaseStation(ref))
+          futureRegister.map {
+            case Drone.RegisterResponse =>
+              context.log.debug(s"Register Drone ${drone.path} @ ${context.self.path}")
+              registeredDrones.add(drone)
+            case Drone.NoRegisterResponse =>
+              context.log.debug(s"Drone not registered @ ${context.self.path}")
+          }
+//        }
         Behaviors.same
 
       case GetBaseDetails(replyTo) =>

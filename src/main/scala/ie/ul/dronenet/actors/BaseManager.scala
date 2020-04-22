@@ -71,6 +71,7 @@ class BaseManager(context: ActorContext[BaseManager.Command], baseName: String, 
 
           case ListingResponse(DroneManager.DroneManagerServiceKey.Listing(listings)) =>
             drone_manager_listing = listings
+//            baseStation ! RemoveDeadDrones
             Behaviors.same
 
           case wrapped: WrappedDroneManagerMsg =>

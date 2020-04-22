@@ -26,9 +26,9 @@ object DroneManager {
 
   def apply(droneName: String, dType: String, range: Double, maxWeight: Double): Behavior[Command] = {
     Behaviors.setup[Command] { context =>
-        val drone = context.spawn(Drone(droneName, dType, range, maxWeight, context.self), droneName+"-manager")
+        val drone = context.spawn(Drone(droneName, dType, range, maxWeight, context.self), droneName)
         val msgAdapterListingResponse = context.messageAdapter[Receptionist.Listing](ListingResponse)
-        val router = context.spawn(routerGroup.withRoundRobinRouting(), "baseStationManager-group")
+        val router = context.spawn(routerGroup.withRoundRobinRouting(), "BaseStationManager-group")
 
         var noInitialBaseStation: Boolean = true
         var listingCtr: Int = 0
@@ -54,13 +54,13 @@ object DroneManager {
             // get initial base station once listing has been populated
             if(noInitialBaseStation && listingCtr > 0) {
               noInitialBaseStation = false
-              router ! BaseManager.WrappedDroneManagerMsg(RequestBaseStation(0,drone))
+              listings.foreach( _ => router ! BaseManager.WrappedDroneManagerMsg(RequestBaseStation(0,drone))              )
             }
             listingCtr = 1
             Behaviors.same
 
           case RequestBaseStation(reqId, drone) => // TODO: Restructure to ensure that Listing Set is always updated before requesting a BaseStation
-            context.log.debug(s"RequestBaseStation: reqId{$reqId}")
+//            context.log.debug(s"RequestBaseStation: reqId{$reqId}")
 //            router ! BaseManager.WrappedDroneManagerMsg(RequestBaseStation(reqId, drone))
 //            context.log.debug(" --- post router ! WrappedDroneManagerMsg()")
             Behaviors.same

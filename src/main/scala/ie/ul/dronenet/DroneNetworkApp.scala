@@ -34,11 +34,11 @@ object DroneNetworkApp {
       val selfMember = Cluster(context.system).selfMember
       if (selfMember.hasRole("Drone")) {
         val name = actorConfig.getAnyRef("drone.name").toString
-        val dtype = actorConfig.getAnyRef("drone.type").toString
+        val dType = actorConfig.getAnyRef("drone.type").toString
         val range = actorConfig.getDouble("drone.range")
         val maxWeight = actorConfig.getDouble("drone.max-weight")
 
-        val droneManager = context.spawn(DroneManager(name, dtype, range, maxWeight), name+"-manager")
+        val droneManager = context.spawn(DroneManager(name, dType, range, maxWeight), name+"-manager")
 
       } else if (selfMember.hasRole("Base")) {
         val name = actorConfig.getAnyRef("base-station.name").toString

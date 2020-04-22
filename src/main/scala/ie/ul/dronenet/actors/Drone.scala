@@ -46,8 +46,11 @@ object Drone {
      msg match {
        case RegisterBaseStation(baseStation) =>
          context.log.info("BS asking to register...")
-         if(!registeredToBase)  baseStation ! RegisterResponse
-         else                   baseStation ! NoRegisterResponse
+         if(!registeredToBase) {
+           baseStation ! RegisterResponse
+           registeredToBase = true
+         } else
+           baseStation ! NoRegisterResponse
          Behaviors.same
      }
    }
