@@ -7,8 +7,9 @@ import akka.actor.typed.scaladsl.{AbstractBehavior, ActorContext, Behaviors}
 import akka.actor.typed.scaladsl.adapter._
 import akka.actor.typed.scaladsl.AskPattern._
 import akka.http.scaladsl.Http
+import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport
 import akka.http.scaladsl.server.Directives._
-import akka.http.scaladsl.model.{HttpRequest, HttpResponse, StatusCodes, Uri}
+import akka.http.scaladsl.model.{HttpEntity, HttpRequest, HttpResponse, StatusCodes, Uri}
 import akka.http.scaladsl.server.Route
 import akka.util.{ByteString, Timeout}
 
@@ -17,7 +18,13 @@ import scala.concurrent.duration._
 import scala.collection.mutable
 import spray.json._
 import ch.megard.akka.http.cors.scaladsl.CorsDirectives._
-import DefaultJsonProtocol._
+import spray.json.DefaultJsonProtocol._
+import spray.json._
+
+case class Mission(lat: Double, lng: Double, weight: Double)
+object PersonJsonSupport extends DefaultJsonProtocol with SprayJsonSupport {
+  implicit val MissionFormat = jsonFormat3(Mission)
+}
 
 object IOSocket {
 
@@ -39,6 +46,7 @@ object IOSocket {
  */
 class IOSocket(context: ActorContext[IOSocket.Command]) extends AbstractBehavior[IOSocket.Command](context) {
   import IOSocket._
+  import PersonJsonSupport._
 
   implicit val system: actor.ActorSystem = context.system.toClassic
   implicit val ec: ExecutionContextExecutor = system.dispatcher
@@ -48,18 +56,26 @@ class IOSocket(context: ActorContext[IOSocket.Command]) extends AbstractBehavior
   var baseStations: List[(String, Double, Double)] = _
 
   val route: Route = cors() (
-    get {
-      path("get-stations") {
-        val optStations: Future[Option[List[(String, Double, Double)]]] = getStations
+    concat (
+      get {
+        path("get-stations") {
+          val optStations: Future[Option[List[(String, Double, Double)]]] = getStations
 
-        onSuccess(optStations) {
-          case Some(stationsList) =>
-            context.log.debug(stationsList.toString())
-            complete(stationsList.toJson.toString())
-          case None               => complete(StatusCodes.InternalServerError)
+          onSuccess(optStations) {
+            case Some(stationsList) =>
+              context.log.debug(stationsList.toString())
+              complete(stationsList.toJson.toString())
+            case None               => complete(StatusCodes.InternalServerError)
+          }
+        }
+      },
+      post {
+        entity(as[Mission]) { mission =>
+          context.log.debug("Person: ${person.name} - favorite number: ${person.favoriteNumber}")
+          complete(s"Mission: ${mission.lat}, ${mission.lng} with ${mission.weight}g payload")
         }
       }
-    }
+    )
   )
 
   val bindingFuture: Future[Http.ServerBinding] = Http(system).bindAndHandle(route, "0.0.0.0", 8888)
