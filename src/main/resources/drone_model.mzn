@@ -8,7 +8,7 @@ var float: r;
 var int: drone_index;
 
 % check for given drone having minimum requirements for this mission
-predicate satisfies_reqs(float: range, float: cap, int: index) = range > (distance*2) /\ cap >= weight -> r = range /\ drone_index = index;
+predicate satisfies_reqs(float: range, float: cap, int: index) = range > (distance*1.2) /\ cap >= weight -> r = range /\ drone_index = index;
 
 constraint  % check capabilities of each drone passed 
   forall(i in 1..n)( 
