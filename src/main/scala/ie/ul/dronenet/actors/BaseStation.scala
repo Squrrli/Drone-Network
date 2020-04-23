@@ -95,7 +95,7 @@ class BaseStation(context: ActorContext[BaseStation.Command], baseId: String, ma
             // Form JSON and execute MiniZinc Model
             val mapped = details.map(res => Tuple3(res.details._1, res.details._2, res.details._3))
             val tempFile = writeFile(mapped, calculateTotalDistance(origin, dest, distance), weight)
-            Seq("minizinc", "src/main/resources/drone_model.mzn", tempFile.getAbsolutePath).!!
+            Seq("minizinc", "src\\main\\resources\\drone_model.mzn", tempFile.getAbsolutePath).!!
           }
           case Failure(exception) => context.log.error(exception.getMessage)
         }
@@ -105,7 +105,7 @@ class BaseStation(context: ActorContext[BaseStation.Command], baseId: String, ma
       }
     }
   }
-  def writeFile(details: List[(String, Double, Double)], distance: Double, weight: Double): File = {
+  def writeFile(details: List[(String, Double, Double)], distance: BigDecimal, weight: Double): File = {
     val file = File.createTempFile("drones_", ".json")
     val bw = new BufferedWriter(new FileWriter(file))
     var str: String = "{ \"distance\": " + distance + ", \"weight\": " + weight+ ", \"n\":" + details.size + ", \"drone_attr\": [{\"e\": \"Range\"}, {\"e\": \"Capacity\"}], \"drones\": ["
@@ -123,7 +123,8 @@ class BaseStation(context: ActorContext[BaseStation.Command], baseId: String, ma
   }
 
   // Return total distance of Mission => Base -> Start -> End -> Base
-  private def calculateTotalDistance(start: (Double, Double), end: (Double, Double), interDistance: Double): Double = {
+  private def calculateTotalDistance(start: (Double, Double), end: (Double, Double), interDistance: Double): BigDecimal = {
+    context.log.debug(s"distance received from frontend: ${interDistance}m or ${interDistance/1000}km")
     distance((this.latlng.head, this.latlng(1)), start) + distance((this.latlng.head, this.latlng(1)), end) + interDistance
   }
 
@@ -133,12 +134,14 @@ class BaseStation(context: ActorContext[BaseStation.Command], baseId: String, ma
    * @param p2 second decimal coordinate point
    * @return distance between points
    */
-  private def distance(p1: (Double, Double), p2: (Double, Double)): Double ={
+  // TODO: Look into distance formula, result seems far too high
+  private def distance(p1: (Double, Double), p2: (Double, Double)): BigDecimal = {
     val R = 6373000 // Radius of Earth in meters
     val b2SLng = p2._2 - p1._2
     val b2SLat = p2._1 - p1._1
     val a1 = (Math.sin(b2SLat/2) * Math.sin(b2SLat/2)) + Math.cos(p1._1) * Math.cos(p2._1) * (Math.sin(b2SLng/2) * Math.sin(b2SLng/2))
     val c = 2 * Math.atan2( Math.sqrt(a1), Math.sqrt(1-a1))
-    R * c
+    context.log.debug(s"distance from ${p1} to ${p2} = ${BigDecimal(R*c)}m or ${BigDecimal(R*c) / 1000}km")
+    BigDecimal(R * c)
   }
 }
