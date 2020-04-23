@@ -21,6 +21,9 @@ import ch.megard.akka.http.cors.scaladsl.CorsDirectives._
 import ie.ul.dronenet.actors.BaseStation.MissionResponse
 import spray.json._
 
+import scala.util
+import scala.util.Failure
+
 //case class LatLng(lat: Double, lng: Double)
 case class Mission(origin: List[Double], dest: List[Double], weight: Double, distance: Double)
 object MissionJsonSupport extends DefaultJsonProtocol with SprayJsonSupport {
@@ -50,7 +53,7 @@ class IOSocket(context: ActorContext[IOSocket.Command]) extends AbstractBehavior
   import MissionJsonSupport._
 
   val routerGroup: GroupRouter[BaseStation.Command] = Routers.group(BaseStation.BaseStationServiceKey)
-  val router = context.spawn(routerGroup.withRoundRobinRouting(), "BaseStation-group")
+  val router: ActorRef[BaseStation.Command] = context.spawn(routerGroup.withRoundRobinRouting(), "BaseStation-group")
 
   implicit val system: actor.ActorSystem = context.system.toClassic
   implicit val ec: ExecutionContextExecutor = system.dispatcher
@@ -87,11 +90,12 @@ class IOSocket(context: ActorContext[IOSocket.Command]) extends AbstractBehavior
             val res: Future[BaseStation.MissionResponse] = router.ask(ref => BaseStation.ExecuteMission(ref,
               (mission.origin.head, mission.origin(1)), (mission.dest.head, mission.dest(1)), mission.weight, mission.distance))
 
-//            onComplete(res) {
-//
-//            }
-            val err = 42 / 0
-            complete((42/0).toString)
+            onComplete(res) {
+              case util.Success(value) => complete(value.toString)
+              case Failure(exception) => complete(exception)
+            }
+//            val err = 42 / 0
+//            complete((42/0).toString)
           }
         }
       )

@@ -5,12 +5,13 @@ import java.io.{BufferedWriter, File, FileWriter}
 import akka.actor.typed
 import akka.actor.typed.receptionist.{Receptionist, ServiceKey}
 import akka.actor.typed.{ActorRef, ActorSystem, Behavior, receptionist}
-import akka.actor.typed.scaladsl.{AbstractBehavior, ActorContext, Behaviors}
+import akka.actor.typed.scaladsl.{AbstractBehavior, ActorContext, Behaviors, GroupRouter, Routers}
 import akka.cluster.sharding.typed.scaladsl.{ClusterSharding, Entity, EntityTypeKey}
 
 import scala.concurrent.{ExecutionContextExecutor, Future}
 import akka.actor.typed.scaladsl.AskPattern._
 import akka.util.Timeout
+import ie.ul.dronenet.actors.DroneManager.routerGroup
 
 import scala.collection.mutable
 import scala.concurrent.duration._
@@ -48,7 +49,6 @@ class BaseStation(context: ActorContext[BaseStation.Command], baseId: String, ma
   extends AbstractBehavior[BaseStation.Command](context) {
   import BaseStation._
 
-  context.log.info(s"Drone $baseId started")
   // Register Drone with local Receptionist to allow drone be discovered from across the Cluster
   context.system.receptionist ! Receptionist.register(BaseStationServiceKey, context.self)
 
@@ -100,7 +100,9 @@ class BaseStation(context: ActorContext[BaseStation.Command], baseId: String, ma
               if (System.getProperty("os.name").contains("win"))  pickDrone(Seq("minizinc", "src\\main\\resources\\drone_model.mzn", tempFile.getAbsolutePath).!!)
               else                                                pickDrone(Seq("minizinc", "src/main/resources/drone_model.mzn", tempFile.getAbsolutePath).!!)
             } match {
-              case -1 =>      context.log.debug("No Suitable drones")
+              case -1 =>
+                context.log.debug("No Suitable drones - Forwarding to another Base if available")
+                manager ! BaseManager.ForwardMissionRequest(ExecuteMission(replyTo, origin, dest, weight, distance))
               case i: Int  => context.log.debug(s"sending mission to ${registeredDrones.toList(i)}")
             }
           }

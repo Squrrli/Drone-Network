@@ -4,14 +4,16 @@ import akka.actor.{Scheduler, typed}
 import akka.actor.typed.{ActorRef, Behavior}
 import akka.actor.typed.receptionist.{Receptionist, ServiceKey}
 import akka.actor.typed.scaladsl.AskPattern.Askable
-import akka.actor.typed.scaladsl.{AbstractBehavior, ActorContext, Behaviors}
+import akka.actor.typed.scaladsl.{AbstractBehavior, ActorContext, Behaviors, GroupRouter, Routers}
 import akka.actor.typed.scaladsl.AskPattern._
 import akka.pattern.AskableActorRef
 import akka.util.Timeout
+import ie.ul.dronenet.actors
+import ie.ul.dronenet.actors.DroneManager.routerGroup
 
 import scala.concurrent.duration._
 import scala.collection.mutable
-import scala.concurrent.{ExecutionContextExecutor, Future}
+import scala.concurrent.{Await, ExecutionContextExecutor, Future}
 import scala.util.{Failure, Success}
 
 object BaseManager {
@@ -30,6 +32,8 @@ object BaseManager {
   case class AllDetailsResponse(stations: List[(String, Double, Double)]) extends Response
   case class BaseDetailsResAdapter(responses: List[BaseStation.Response]) extends Command
 
+  case class ForwardMissionRequest(mission: BaseStation.ExecuteMission) extends Command
+
   case object ResFailed extends Command
 
   def apply(managerId: String, capacity: Double, latlng: Seq[Double]): Behavior[Command] = {
@@ -41,7 +45,10 @@ class BaseManager(context: ActorContext[BaseManager.Command], baseName: String, 
   extends AbstractBehavior[BaseManager.Command](context) {
   import BaseManager._
 
-  context.log.debug("{} started @ {}...", baseName, latlng)
+  val routerGroup: GroupRouter[BaseStation.Command] = Routers.group(BaseStation.BaseStationServiceKey)
+  val router: ActorRef[BaseStation.Command] = context.spawn(routerGroup.withRoundRobinRouting(), "BaseStation-group")
+
+
   val listingAdapter: ActorRef[Receptionist.Listing] = context.messageAdapter[Receptionist.Listing](ListingResponse)
 
   // Register with local Receptionist and Subscribe to relevant Listings
@@ -88,7 +95,7 @@ class BaseManager(context: ActorContext[BaseManager.Command], baseName: String, 
             socket ! IOSocket.SetBaseManagerRef(context.self)
             Behaviors.same
 
-          case GetAllStations(replyTo) => {
+          case GetAllStations(replyTo) =>
             val futures: List[Future[BaseStation.DetailsResponse]] = base_station_listing.toList.map( station => {
               val f: Future[BaseStation.Response] = station.ask(ref => BaseStation.GetBaseDetails(ref))
               f.mapTo[BaseStation.DetailsResponse]
@@ -103,7 +110,10 @@ class BaseManager(context: ActorContext[BaseManager.Command], baseName: String, 
               case Failure(_) => context.log.error("something went wrong while getting futures")
             }
             Behaviors.same
-          }
+
+
+          case ForwardMissionRequest(mission) => router ! mission
+            Behaviors.same
         }
   }
 }
