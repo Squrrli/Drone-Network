@@ -93,7 +93,7 @@ class BaseStation(context: ActorContext[BaseStation.Command], baseId: String, ma
             context.log.info(s"\n\n\nRegistered drone details: ${details.toString()}\n\n")
             // Form JSON and execute MiniZinc Model
             val mapped = details.map(res => Tuple3(res.details._1, res.details._2, res.details._3))
-            writeFile(mapped)
+            val tempFile = writeFile(mapped)
           }
           case Failure(exception) => context.log.error(exception.getMessage)
         }
@@ -104,28 +104,19 @@ class BaseStation(context: ActorContext[BaseStation.Command], baseId: String, ma
     }
   }
   def writeFile(details: List[(String, Double, Double)]): File = {
-//    val file = File.createTempFile("drones_", ".json")
-    val file = new File(".\\src\\main\\resources\\test.json")
+    val file = File.createTempFile("drones_", ".json")
     val bw = new BufferedWriter(new FileWriter(file))
-    bw.write(s"{ " +
-      s"\"n\": ${details.size}," +
-      s"\"drone_attr\": [{\"e\": \"Range\"},{\"e\": \"Capacity\"}]" +
-      s"\"drones\": ["
-    )
+    var str: String = "{ \"n\":" + details.size + ", \"drone_attr\": [{\"e\": \"Range\"}, {\"e\": \"Capacity\"}], \"drones\": ["
+    bw.write(str)
     details.filter(_ != details.last)
           .foreach(d => {
-            bw.write(s"[${d._2}, ${d._3}],")
+            str = s"[${d._2}, ${d._3}],"
+            bw.write(str)
           })
-    bw.write(s"[${details.last._2}, ${details.last._3}]]}") // Write Last in list WITHOUT comma to form correct JSON
+    str = s"[${details.last._2}, ${details.last._3}]]}"
+    bw.write(str) // Write Last in list WITHOUT comma to form correct JSON
     bw.close()
+    context.log.info(s"Temporary File Created @ ${file.getAbsolutePath}")
     file
   }
 }
-//{
-//  "n": 2,
-//  "drone_attr": [ {"e": "Range"}, {"e": "Capacity"} ],
-//  "drones": [
-//  [1500.00, 250.00],
-//  [100.00, 1000.00]
-//  ]
-//}
