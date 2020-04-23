@@ -18,6 +18,7 @@ export default class HelpMe extends React.Component {
     handleSubmit = (e) => {
         e.preventDefault();
         let payloadWeight = parseFloat(this.state.weight);
+        let distance = this.props.origin.getLatLng().distanceTo(this.props.dest.getLatLng());
         fetch("http://192.168.43.222:8888/", {
               method: 'POST', // *GET, POST, PUT, DELETE, etc.
               mode: 'cors', // no-cors, *cors, same-origin
@@ -25,22 +26,29 @@ export default class HelpMe extends React.Component {
                 'Content-Type': 'application/json'
               },
               body: JSON.stringify({
-                'lat': this.props.latlng.lat,
-                'lng': this.props.latlng.lng,
+                'origin': [
+                  this.props.origin.getLatLng().lat,
+                  this.props.origin.getLatLng().lng
+                ],
+                'dest': [
+                  this.props.dest.getLatLng().lat,
+                  this.props.dest.getLatLng().lng
+                ],
+                'distance': distance,
                 'weight': payloadWeight
               }) 
             })
         .then(response => {
-                return response;
-            })
+            console.log(response);
+            return response;
+        })
         .then(json => {
-                console.log(json);
-            });
+            console.log(json);
+        });
 
     }
   
     render() {
-      const { showMessage, message } = this.state;
       const labelStyle = {
         //   display: 'block',
           marginRight: '20px'
@@ -50,12 +58,17 @@ export default class HelpMe extends React.Component {
         <div>
           <form onSubmit={this.handleSubmit}>
 
-            <label style={labelStyle} >Latitude:</label>
-            <input type="text" name="lat"disabled value={this.props.latlng.lat}/>
+            <label style={labelStyle} >Origin Latitude:</label>
+            <input type="text" name="lat"disabled value={this.props.origin.getLatLng().lat}/>
 
-            <label style={labelStyle} >Longitude:</label>
-            <input type="text" name="lng"disabled value={this.props.latlng.lng}/>
+            <label style={labelStyle} >Origin Longitude:</label>
+            <input type="text" name="lng"disabled value={this.props.origin.getLatLng().lng}/>
             
+            <label style={labelStyle} >Dest Latitude:</label>
+            <input type="text" name="lat"disabled value={this.props.dest.getLatLng().lat}/>
+
+            <label style={labelStyle} >Dest Longitude:</label>
+            <input type="text" name="lng"disabled value={this.props.dest.getLatLng().lng}/>
             
             <input
               type="text"

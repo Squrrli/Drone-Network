@@ -1,40 +1,49 @@
 import React, {useState, useEffect} from "react";
 import "./App.css";
-import ScoreTracker from "./ScoreTracker";
-import logo from "./logo.svg";
 import Map from "./Map/Map";
 
 function App() {
-  const [stop, setStop] = useState([0, 0])
-  let markerPosition = {
-    lat: stop[0],
-    lng: stop[1]
-  }
+  const [stations, setStations] = useState([]);
 
   // request stop location
   useEffect( () => {
-    const fetchProperty = () => {
-      fetch("http://127.0.0.1:5000/generateStop")
+    const fetchStations = () => {
+      fetch("http://192.168.43.222:8888/get-stations")
         .then(response => {
           return response.json();
-        })
-        .then(stopJSON => {
-          markerPosition.lat = stopJSON[0];
-          markerPosition.lng = stopJSON[1];
-          setStop(stopJSON)
+        }).then(json => {
+          setStations(json);
         });
     };
-    setInterval(() => {
-      fetchProperty()
-    }, 500);
-    fetchProperty();
+
+    const postMission = (lat, lng, weight) => {
+      fetch("http://192.168.43.222:8888/", {
+        method: 'POST', // *GET, POST, PUT, DELETE, etc.
+        mode: 'cors', // no-cors, *cors, same-origin
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          'lat': lat,
+          'lng': lng,
+          'weight': weight
+        }) 
+      })
+        .then(response => {
+          return response;
+        }).then(json => {
+          console.log(json);
+        });
+    };
+
+      // postMission(100.0, 100.0, 2500);
+      fetchStations();
   }, [])
 
-    console.log(markerPosition)
-    return (
+  return (
       <div className="App">
-        <ScoreTracker />
-        <Map markerPosition={ markerPosition } />
+        <Map baseStations={ stations } />
+        <div id="input-form"></div>
       </div>
     );  
 

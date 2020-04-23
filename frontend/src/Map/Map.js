@@ -1,5 +1,9 @@
 import React, { useEffect, useRef, useState } from "react";
+import ReactDOMServer from "react-dom/server";
+import ReactDOM from 'react-dom';
 import L, { marker } from "leaflet";
+import MissionForm from "../MissionForm";
+import HelpMe from "../HelpMe";
 
   const style = {
     width: "100%",
@@ -14,10 +18,10 @@ import L, { marker } from "leaflet";
     [55.391440, -5.497318]
   ]
 
-function Map({ markerPosition }) {
-  // create map
+function Map({baseStations}) {
   const mapRef = useRef(null);
-  const [markers, setMarkers] = useState( [] );
+  const originRef = useRef(null);
+  const destRef = useRef(null);
 
   useEffect(() => {
     mapRef.current = L.map("map", {
@@ -32,23 +36,67 @@ function Map({ markerPosition }) {
             '&copy; <a href="http://osm.org/copyright">OpenStreetMap</a> contributors'
         })
       ]
+    }).on("click", e => {
+      let coords = e.latlng;
+      if(e.originalEvent.ctrlKey === true)  addMarker('destinationIcon.svg', coords);
+      else                                  addMarker('originIcon.svg', coords);
+
+      if(originRef.current !== null && destRef.current !== null ) 
+        ReactDOM.render(<HelpMe origin={originRef.current} dest={destRef.current}/>, document.getElementById('input-form'));
     });
+
+    const addMarker = (iconUrl, coords) => {
+      let myIcon = L.icon({
+        iconUrl: iconUrl,
+        iconSize: [50,50],
+        iconAnchor: [25, 50]
+      });
+      // let m = L.marker(coords, {icon: myIcon}).addTo(mapRef.current);
+      let m = L.marker(coords, {icon: myIcon});
+      if (iconUrl === 'originIcon.svg') {
+        if(originRef.current !== null)
+          mapRef.current.removeLayer(originRef.current);
+        m.addTo(mapRef.current);
+        originRef.current = m;
+      } else {
+        if(destRef.current !== null)
+          mapRef.current.removeLayer(destRef.current);
+        m.addTo(mapRef.current);
+        destRef.current = m;
+      }
+    };
+
+    mapRef.current.doubleClickZoom.disable();
   }, []);
 
-  // add marker
-  const markerRef = useRef(null);
   useEffect(() => {
-    console.log("map stop position: " +  markerPosition)
-    markerRef.current = L.marker(markerPosition).addTo(mapRef.current);
-    let new_state = markers.push(mapRef);
-    // setMarkers(new_state)
+    console.log("statiosn in MAP: ", baseStations);
 
-    // if(markers.length > 2) {
-      // draw line between currentRef and previous Ref
-      // L.polyline([markerRef, markers[markers.length-1]]).addTo(mapRef)
-    // }
+    let baseIcon = L.icon({
+      iconUrl: 'wifi.svg',
+      iconSize: [50,50],
+      iconAnchor: [25, 50]
+    });    
+
+    for(let base of baseStations) {
+      let [name, lat, lng] = base;
+      if(lat != undefined ) {
+        // L.marker([lat, lng], {icon: greenWifiIcon}).addTo(mapRef.current);
+        L.marker([lat, lng], {icon: baseIcon}).addTo(mapRef.current).on('click', (e) => {
+          console.log(e.latlng);
+          var popup = L.popup().setContent(ReactDOMServer.renderToString(
+            <ul>
+              <li>Name: {name}</li>
+              <li>Latitude: {lat}</li>
+              <li>Longitude: {lng}</li>
+            </ul>
+          )).setLatLng(e.latlng);
+          popup.openOn(mapRef.current);
+        })
+      }
+    }
   
-  }, [markerPosition]);
+  }, [baseStations]);
 
   return <div id="map" style={style} />;
 }
