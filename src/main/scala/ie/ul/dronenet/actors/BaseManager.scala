@@ -26,8 +26,6 @@ object BaseManager {
   case class SetIOSocket(ref: ActorRef[IOSocket.Command]) extends Command
 
   case class StationsResponse(stations: mutable.Set[ActorRef[BaseStation.Command]]) extends Command
-//  case class BaseDetailsResAdapter(details: (String, Float, Float)) extends Command
-
   case class GetAllStations(replyTo: ActorRef[AllDetailsResponse]) extends Command
   case class AllDetailsResponse(stations: List[(String, Double, Double)]) extends Response
   case class BaseDetailsResAdapter(responses: List[BaseStation.Response]) extends Command
@@ -59,18 +57,19 @@ class BaseManager(context: ActorContext[BaseManager.Command], baseName: String, 
   implicit val scheduler: typed.Scheduler = context.system.scheduler
 
   var ioSocket: Option[ActorRef[IOSocket.Command]] = None
-  var base_station_listing: mutable.Set[ActorRef[BaseStation.Command]] = mutable.Set.empty
-  var drone_manager_listing: mutable.Set[ActorRef[DroneManager.Command]] = mutable.Set.empty
+  var base_station_listing: Set[ActorRef[BaseStation.Command]] = Set.empty
+  var drone_manager_listing: Set[ActorRef[DroneManager.Command]] = Set.empty
 
   override def onMessage(msg: BaseManager.Command): Behavior[BaseManager.Command] = {
         msg match {
           case ListingResponse(BaseStation.BaseStationServiceKey.Listing(listings)) =>
-            base_station_listing ++= listings
+            base_station_listing = listings
             // Send IOSocket ActorRef to allow for updating frontend
             Behaviors.same
 
           case ListingResponse(DroneManager.DroneManagerServiceKey.Listing(listings)) =>
-            drone_manager_listing ++= listings
+            drone_manager_listing = listings
+//            baseStation ! RemoveDeadDrones(listing) TODO: Implement Removal of dead drones from BaseStation list
             Behaviors.same
 
           case wrapped: WrappedDroneManagerMsg =>
