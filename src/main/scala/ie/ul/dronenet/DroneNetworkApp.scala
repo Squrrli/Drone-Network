@@ -6,8 +6,6 @@ import akka.actor.typed.scaladsl.{AbstractBehavior, ActorContext, Behaviors}
 import akka.cluster.typed.{Cluster, ClusterSingleton, SingletonActor}
 import com.typesafe.config.ConfigFactory
 import ie.ul.dronenet.actors.{BaseManager, BaseStation, ClusterListener, Drone, DroneManager, IOSocket, NetworkSupervisor}
-import com.typesafe.config.Config
-
 import scala.io.StdIn
 import scala.sys.process._
 

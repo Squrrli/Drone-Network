@@ -77,7 +77,6 @@ class BaseStation(context: ActorContext[BaseStation.Command], baseId: String, ma
         Behaviors.same
 
       case GetBaseDetails(replyTo) =>
-        context.log.info("\n---------------- BaseDetailsRequested ---------------\n")
         val res: (String, Double, Double) = (baseId, latlng.head, latlng(1))
         replyTo ! DetailsResponse(res)
         Behaviors.same
@@ -95,8 +94,17 @@ class BaseStation(context: ActorContext[BaseStation.Command], baseId: String, ma
             // Form JSON and execute MiniZinc Model
             val mapped = details.map(res => Tuple3(res.details._1, res.details._2, res.details._3))
             val tempFile = writeFile(mapped, calculateTotalDistance(origin, dest, distance), weight)
-            Seq("minizinc", "src\\main\\resources\\drone_model.mzn", tempFile.getAbsolutePath).!!
+            var droneIndex = -1
+
+            {
+              if (System.getProperty("os.name").contains("win"))  pickDrone(Seq("minizinc", "src\\main\\resources\\drone_model.mzn", tempFile.getAbsolutePath).!!)
+              else                                                pickDrone(Seq("minizinc", "src/main/resources/drone_model.mzn", tempFile.getAbsolutePath).!!)
+            } match {
+              case -1 =>      context.log.debug("No Suitable drones")
+              case i: Int  => context.log.debug(s"sending mission to ${registeredDrones.toList(i)}")
+            }
           }
+
           case Failure(exception) => context.log.error(exception.getMessage)
         }
 
@@ -122,10 +130,22 @@ class BaseStation(context: ActorContext[BaseStation.Command], baseId: String, ma
     file
   }
 
+  // Return index of most suitable drone from model
+  def pickDrone(modelResult: String): Int = {
+    val x  = modelResult.substring(1, modelResult.indexOf(']'))
+      .split(',').toList
+      .map(_.toDouble)
+    val y = x.filter(_ != 0)
+
+    if (y.isEmpty)  -1
+    else            x.indexOf(y.min)
+  }
+
   // Return total distance of Mission => Base -> Start -> End -> Base
   private def calculateTotalDistance(start: (Double, Double), end: (Double, Double), interDistance: Double): BigDecimal = {
     context.log.debug(s"distance received from frontend: ${interDistance}m or ${interDistance/1000}km")
     distance((this.latlng.head, this.latlng(1)), start) + distance((this.latlng.head, this.latlng(1)), end) + interDistance
+    BigDecimal(1337)
   }
 
   /**

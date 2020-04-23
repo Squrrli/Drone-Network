@@ -19,7 +19,7 @@ export default class HelpMe extends React.Component {
         e.preventDefault();
         let payloadWeight = parseFloat(this.state.weight);
         let distance = this.props.origin.getLatLng().distanceTo(this.props.dest.getLatLng());
-        fetch("http://192.168.43.222:8888/", {
+        fetch("http://192.168.43.135:8888/", {
               method: 'POST', // *GET, POST, PUT, DELETE, etc.
               mode: 'cors', // no-cors, *cors, same-origin
               headers: {
