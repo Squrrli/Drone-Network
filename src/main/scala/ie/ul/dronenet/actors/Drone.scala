@@ -24,7 +24,7 @@ object Drone {
   final case object RegisterResponse extends Response
   final case object NoRegisterResponse extends Response
 
-  final case class GetDetails(replyTo: ActorRef[Response]) extends Command
+  final case class GetDetails(replyTo: ActorRef[DetailsResponse]) extends Command
   final case class DetailsResponse(details: (String, Double, Double)) extends Response
 
   def apply(droneId: String, dType: String, range: Double, maxWeight: Double, droneManager: ActorRef[DroneManager.Command]): Behavior[Command] =

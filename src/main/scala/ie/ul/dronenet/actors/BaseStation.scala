@@ -1,5 +1,7 @@
 package ie.ul.dronenet.actors
 
+import java.io.{BufferedWriter, File, FileWriter}
+
 import akka.actor.typed
 import akka.actor.typed.receptionist.{Receptionist, ServiceKey}
 import akka.actor.typed.{ActorRef, ActorSystem, Behavior, receptionist}
@@ -81,17 +83,17 @@ class BaseStation(context: ActorContext[BaseStation.Command], baseId: String, ma
 
       case ExecuteMission(replyTo, origin, dest, weight, distance) => {
         // Get Registered Drone Details
-        val droneFutures: List[Future[Drone.Response]] = registeredDrones.toList.map(drone => {
-          val f: Future[Drone.Response] = drone.ask(ref => Drone.GetDetails(ref))
+        val droneFutures: List[Future[Drone.DetailsResponse]] = registeredDrones.toList.map(drone => {
+          val f: Future[Drone.DetailsResponse] = drone.ask(ref => Drone.GetDetails(ref))
           f
         })
 
         Future.sequence(droneFutures).onComplete {
           case Success(details) => {
+            context.log.info(s"\n\n\nRegistered drone details: ${details.toString()}\n\n")
             // Form JSON and execute MiniZinc Model
-            context.log.info(s"Drone details: ${details.toString()}")
-
-//            details.
+            val mapped = details.map(res => Tuple3(res.details._1, res.details._2, res.details._3))
+            writeFile(mapped)
           }
           case Failure(exception) => context.log.error(exception.getMessage)
         }
@@ -101,12 +103,29 @@ class BaseStation(context: ActorContext[BaseStation.Command], baseId: String, ma
       }
     }
   }
-//  def writeFile(filename: String, details: List[(String, Double, Double)]): Unit = {
-//    val file = new File(filename)
-//    val bw = new BufferedWriter(new FileWriter(file))
-//    for (line <- lines) {
-//      bw.write(line)
-//    }
-//    bw.close()
-//  }
+  def writeFile(details: List[(String, Double, Double)]): File = {
+//    val file = File.createTempFile("drones_", ".json")
+    val file = new File(".\\src\\main\\resources\\test.json")
+    val bw = new BufferedWriter(new FileWriter(file))
+    bw.write(s"{ " +
+      s"\"n\": ${details.size}," +
+      s"\"drone_attr\": [{\"e\": \"Range\"},{\"e\": \"Capacity\"}]" +
+      s"\"drones\": ["
+    )
+    details.filter(_ != details.last)
+          .foreach(d => {
+            bw.write(s"[${d._2}, ${d._3}],")
+          })
+    bw.write(s"[${details.last._2}, ${details.last._3}]]}") // Write Last in list WITHOUT comma to form correct JSON
+    bw.close()
+    file
+  }
 }
+//{
+//  "n": 2,
+//  "drone_attr": [ {"e": "Range"}, {"e": "Capacity"} ],
+//  "drones": [
+//  [1500.00, 250.00],
+//  [100.00, 1000.00]
+//  ]
+//}
