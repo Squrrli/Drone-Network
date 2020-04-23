@@ -26,8 +26,6 @@ object BaseManager {
   case class SetIOSocket(ref: ActorRef[IOSocket.Command]) extends Command
 
   case class StationsResponse(stations: mutable.Set[ActorRef[BaseStation.Command]]) extends Command
-//  case class BaseDetailsResAdapter(details: (String, Float, Float)) extends Command
-
   case class GetAllStations(replyTo: ActorRef[AllDetailsResponse]) extends Command
   case class AllDetailsResponse(stations: List[(String, Double, Double)]) extends Response
   case class BaseDetailsResAdapter(responses: List[BaseStation.Response]) extends Command

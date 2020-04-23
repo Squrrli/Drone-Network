@@ -3,27 +3,29 @@ package ie.ul.dronenet.actors
 import akka.actor.typed
 import akka.{NotUsed, actor}
 import akka.actor.typed.{ActorRef, ActorSystem, Behavior, Scheduler}
-import akka.actor.typed.scaladsl.{AbstractBehavior, ActorContext, Behaviors}
+import akka.actor.typed.scaladsl.{AbstractBehavior, ActorContext, Behaviors, GroupRouter, Routers}
 import akka.actor.typed.scaladsl.adapter._
 import akka.actor.typed.scaladsl.AskPattern._
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport
+import akka.http.scaladsl.model.StatusCodes.Success
 import akka.http.scaladsl.server.Directives._
 import akka.http.scaladsl.model.{HttpEntity, HttpRequest, HttpResponse, StatusCodes, Uri}
-import akka.http.scaladsl.server.Route
+import akka.http.scaladsl.server.{ExceptionHandler, Route}
 import akka.util.{ByteString, Timeout}
 
-import scala.concurrent.{Await, ExecutionContextExecutor, Future}
+import scala.concurrent.{Await, ExecutionContextExecutor, Future, TimeoutException}
 import scala.concurrent.duration._
 import scala.collection.mutable
-import spray.json._
 import ch.megard.akka.http.cors.scaladsl.CorsDirectives._
-import spray.json.DefaultJsonProtocol._
+import ie.ul.dronenet.actors.BaseStation.MissionResponse
 import spray.json._
 
-case class Mission(lat: Double, lng: Double, weight: Double)
-object PersonJsonSupport extends DefaultJsonProtocol with SprayJsonSupport {
-  implicit val MissionFormat = jsonFormat3(Mission)
+//case class LatLng(lat: Double, lng: Double)
+case class Mission(origin: List[Double], dest: List[Double], weight: Double, distance: Double)
+object MissionJsonSupport extends DefaultJsonProtocol with SprayJsonSupport {
+//  implicit val LatLngFormat = jsonFormat2(LatLng)
+  implicit val MissionFormat = jsonFormat4(Mission)
 }
 
 object IOSocket {
@@ -32,7 +34,6 @@ object IOSocket {
 
   final case class BaseStationResponse(stations: List[(String, Double, Double)]) extends Command
   final case class SetBaseManagerRef(ref: ActorRef[BaseManager.Command]) extends Command
-
   case class AdaptedResponse(res: mutable.Set[ActorRef[BaseStation.Command]]) extends Command
 
   def apply(): Behavior[Command] = Behaviors.setup(
@@ -46,36 +47,55 @@ object IOSocket {
  */
 class IOSocket(context: ActorContext[IOSocket.Command]) extends AbstractBehavior[IOSocket.Command](context) {
   import IOSocket._
-  import PersonJsonSupport._
+  import MissionJsonSupport._
+
+  val routerGroup: GroupRouter[BaseStation.Command] = Routers.group(BaseStation.BaseStationServiceKey)
+  val router = context.spawn(routerGroup.withRoundRobinRouting(), "BaseStation-group")
 
   implicit val system: actor.ActorSystem = context.system.toClassic
   implicit val ec: ExecutionContextExecutor = system.dispatcher
-  implicit val timeout: Timeout = 3.second
+//  implicit val timeout: Timeout = 3.second
   implicit val scheduler: Scheduler = context.system.scheduler
   var baseManager: ActorRef[BaseManager.Command] = _
   var baseStations: List[(String, Double, Double)] = _
 
-  val route: Route = cors() (
-    concat (
-      get {
-        path("get-stations") {
-          val optStations: Future[Option[List[(String, Double, Double)]]] = getStations
+  val exceptionHandler: ExceptionHandler = ExceptionHandler {
+    case _: TimeoutException => complete(s"${StatusCodes.RequestTimeout}")
+    case _ => complete(s"${StatusCodes.InternalServerError}")
+  }
 
-          onSuccess(optStations) {
-            case Some(stationsList) =>
-              context.log.debug(stationsList.toString())
-              complete(stationsList.toJson.toString())
-            case None               => complete(StatusCodes.InternalServerError)
+  val route: Route = cors() (
+    handleExceptions(exceptionHandler) {
+      concat (
+        get {
+          path("get-stations") {
+            val optStations: Future[Option[List[(String, Double, Double)]]] = getStations
+
+            onSuccess(optStations) {
+              case Some(stationsList) =>
+                context.log.debug(stationsList.toString())
+                complete(stationsList.toJson.toString())
+              case None               => complete(StatusCodes.InternalServerError)
+            }
+          }
+        },
+        post {
+          entity(as[Mission]) { mission =>
+            context.log.debug(s"Mission: [${mission.origin.head}, ${mission.origin(1)}] to [${mission.dest.head}, ${mission.dest(1)}] with ${mission.weight}g payload")
+
+            implicit val timeout: Timeout = 10.second
+            val res: Future[BaseStation.MissionResponse] = router.ask(ref => BaseStation.ExecuteMission(ref,
+              (mission.origin.head, mission.origin(1)), (mission.dest.head, mission.dest(1)), mission.weight, mission.distance))
+
+//            onComplete(res) {
+//
+//            }
+            val err = 42 / 0
+            complete((42/0).toString)
           }
         }
-      },
-      post {
-        entity(as[Mission]) { mission =>
-          context.log.debug("Person: ${person.name} - favorite number: ${person.favoriteNumber}")
-          complete(s"Mission: ${mission.lat}, ${mission.lng} with ${mission.weight}g payload")
-        }
-      }
-    )
+      )
+    }
   )
 
   val bindingFuture: Future[Http.ServerBinding] = Http(system).bindAndHandle(route, "0.0.0.0", 8888)
@@ -89,7 +109,8 @@ class IOSocket(context: ActorContext[IOSocket.Command]) extends AbstractBehavior
   }
 
   def getStations: Future[Option[List[(String, Double, Double)]]] = {
-      val f: Future[BaseManager.AllDetailsResponse] = baseManager.ask(ref => BaseManager.GetAllStations(ref))
-      f.map(res => Some(res.stations))
+    implicit val timeout: Timeout = 3.second
+    val f: Future[BaseManager.AllDetailsResponse] = baseManager.ask(ref => BaseManager.GetAllStations(ref))
+    f.map(res => Some(res.stations))
   }
 }

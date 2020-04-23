@@ -9,8 +9,10 @@ import akka.cluster.sharding.typed.scaladsl.{ClusterSharding, Entity, EntityType
 import scala.concurrent.{ExecutionContextExecutor, Future}
 import akka.actor.typed.scaladsl.AskPattern._
 import akka.util.Timeout
+
 import scala.collection.mutable
 import scala.concurrent.duration._
+import scala.util.{Failure, Success}
 
 
 object BaseStation {
@@ -29,6 +31,9 @@ object BaseStation {
 
   case class RegisterDrone(drone: ActorRef[Drone.Command]) extends Command
   case class UnregisterDrone(drone: ActorRef[Drone.Command]) extends Command
+
+  case class ExecuteMission(replyTo: ActorRef[MissionResponse], origin: (Double, Double), dest: (Double, Double), weight: Double, distance: Double) extends Command
+  case class MissionResponse(success: Boolean) extends Response
 
   def apply(baseId: String, manager: ActorRef[BaseManager.Command], capacity: Double, latlng: Seq[Double]): Behavior[Command] =
     Behaviors.setup[Command] {
@@ -73,6 +78,36 @@ class BaseStation(context: ActorContext[BaseStation.Command], baseId: String, ma
         val res: (String, Double, Double) = (baseId, latlng.head, latlng(1))
         replyTo ! DetailsResponse(res)
         Behaviors.same
+
+      case ExecuteMission(replyTo, origin, dest, weight, distance) => {
+        // Get Registered Drone Details
+        val droneFutures: List[Future[Drone.Response]] = List[Future[Drone.Response]]()
+        registeredDrones.foreach(drone => {
+          drone.ask(ref => Drone.GetDetails(ref)) :: droneFutures
+          context.log.debug(droneFutures.toString())
+        })
+
+        Future.sequence(droneFutures).onComplete {
+          case Success(details) => {
+            // Form JSON and execute MiniZinc Model
+            context.log.info(s"Drone details: ${details.toString()}")
+
+//            details.
+          }
+          case Failure(exception) => context.log.error(exception.getMessage)
+        }
+
+
+        Behaviors.same
+      }
     }
   }
+//  def writeFile(filename: String, details: List[(String, Double, Double)]): Unit = {
+//    val file = new File(filename)
+//    val bw = new BufferedWriter(new FileWriter(file))
+//    for (line <- lines) {
+//      bw.write(line)
+//    }
+//    bw.close()
+//  }
 }
