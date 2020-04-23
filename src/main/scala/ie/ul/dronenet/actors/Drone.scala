@@ -55,6 +55,10 @@ object Drone {
          } else
            baseStation ! NoRegisterResponse
          Behaviors.same
+
+       case GetDetails(replyTo) =>
+         replyTo ! DetailsResponse((dType, range, maxWeight))
+         Behaviors.same
      }
    }
  }

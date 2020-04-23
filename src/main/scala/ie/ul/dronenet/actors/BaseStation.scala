@@ -81,10 +81,9 @@ class BaseStation(context: ActorContext[BaseStation.Command], baseId: String, ma
 
       case ExecuteMission(replyTo, origin, dest, weight, distance) => {
         // Get Registered Drone Details
-        val droneFutures: List[Future[Drone.Response]] = List[Future[Drone.Response]]()
-        registeredDrones.foreach(drone => {
-          drone.ask(ref => Drone.GetDetails(ref)) :: droneFutures
-          context.log.debug(droneFutures.toString())
+        val droneFutures: List[Future[Drone.Response]] = registeredDrones.toList.map(drone => {
+          val f: Future[Drone.Response] = drone.ask(ref => Drone.GetDetails(ref))
+          f
         })
 
         Future.sequence(droneFutures).onComplete {
