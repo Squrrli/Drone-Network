@@ -15,6 +15,7 @@ import akka.util.Timeout
 import scala.collection.mutable
 import scala.concurrent.duration._
 import scala.util.{Failure, Success}
+import scala.sys.process._
 
 
 object BaseStation {
@@ -93,7 +94,8 @@ class BaseStation(context: ActorContext[BaseStation.Command], baseId: String, ma
             context.log.info(s"\n\n\nRegistered drone details: ${details.toString()}\n\n")
             // Form JSON and execute MiniZinc Model
             val mapped = details.map(res => Tuple3(res.details._1, res.details._2, res.details._3))
-            writeFile(mapped)
+            val tempFile = writeFile(mapped, calculateTotalDistance(origin, dest, distance), weight)
+            Seq("minizinc", "src/main/resources/drone_model.mzn", tempFile.getAbsolutePath).!!
           }
           case Failure(exception) => context.log.error(exception.getMessage)
         }
@@ -103,29 +105,40 @@ class BaseStation(context: ActorContext[BaseStation.Command], baseId: String, ma
       }
     }
   }
-  def writeFile(details: List[(String, Double, Double)]): File = {
-//    val file = File.createTempFile("drones_", ".json")
-    val file = new File(".\\src\\main\\resources\\test.json")
+  def writeFile(details: List[(String, Double, Double)], distance: Double, weight: Double): File = {
+    val file = File.createTempFile("drones_", ".json")
     val bw = new BufferedWriter(new FileWriter(file))
-    bw.write(s"{ " +
-      s"\"n\": ${details.size}," +
-      s"\"drone_attr\": [{\"e\": \"Range\"},{\"e\": \"Capacity\"}]" +
-      s"\"drones\": ["
-    )
+    var str: String = "{ \"distance\": " + distance + ", \"weight\": " + weight+ ", \"n\":" + details.size + ", \"drone_attr\": [{\"e\": \"Range\"}, {\"e\": \"Capacity\"}], \"drones\": ["
+    bw.write(str)
     details.filter(_ != details.last)
           .foreach(d => {
-            bw.write(s"[${d._2}, ${d._3}],")
+            str = s"[${d._2}, ${d._3}],"
+            bw.write(str)
           })
-    bw.write(s"[${details.last._2}, ${details.last._3}]]}") // Write Last in list WITHOUT comma to form correct JSON
+    str = s"[${details.last._2}, ${details.last._3}]]}"
+    bw.write(str) // Write Last in list WITHOUT comma to form correct JSON
     bw.close()
+    context.log.info(s"Temporary File Created @ ${file.getAbsolutePath}")
     file
   }
+
+  // Return total distance of Mission => Base -> Start -> End -> Base
+  private def calculateTotalDistance(start: (Double, Double), end: (Double, Double), interDistance: Double): Double = {
+    distance((this.latlng.head, this.latlng(1)), start) + distance((this.latlng.head, this.latlng(1)), end) + interDistance
+  }
+
+  /**
+   * Distance formula taken from: https://andrew.hedges.name/experiments/haversine/
+   * @param p1 first decimal coordinate point
+   * @param p2 second decimal coordinate point
+   * @return distance between points
+   */
+  private def distance(p1: (Double, Double), p2: (Double, Double)): Double ={
+    val R = 6373000 // Radius of Earth in meters
+    val b2SLng = p2._2 - p1._2
+    val b2SLat = p2._1 - p1._1
+    val a1 = (Math.sin(b2SLat/2) * Math.sin(b2SLat/2)) + Math.cos(p1._1) * Math.cos(p2._1) * (Math.sin(b2SLng/2) * Math.sin(b2SLng/2))
+    val c = 2 * Math.atan2( Math.sqrt(a1), Math.sqrt(1-a1))
+    R * c
+  }
 }
-//{
-//  "n": 2,
-//  "drone_attr": [ {"e": "Range"}, {"e": "Capacity"} ],
-//  "drones": [
-//  [1500.00, 250.00],
-//  [100.00, 1000.00]
-//  ]
-//}

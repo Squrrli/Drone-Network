@@ -8,8 +8,7 @@ var float: r;
 var int: drone_index;
 
 % check for given drone having minimum requirements for this mission
-predicate satisfies_reqs(float: range, float: cap, int: index) = range > (distance*2) /\ cap >= weight -> 
-                                                                 r = range /\ drone_index = index;
+predicate satisfies_reqs(float: range, float: cap, int: index) = range > (distance*1.2) /\ cap >= weight -> r = range /\ drone_index = index;
 
 constraint  % check capabilities of each drone passed 
   forall(i in 1..n)( 
@@ -18,7 +17,7 @@ constraint  % check capabilities of each drone passed
 constraint r > 0.0;
 
 output [  % Output CSV string formatted as [drone_index, Range, Capacity]
-  "\(drone_index-1),\(drones[drone_index,Range]),\(drones[drone_index,Capacity])\n", % drone_index decremented to match scala standard list indexing
+  "\(drone_index-1),\(drones[drone_index,Range]),\(drones[drone_index,Capacity])\n" % drone_index decremented to match scala standard list indexing
 ];
 
 solve minimize r;
