@@ -2,4 +2,4 @@ target
 project
 node_modules
 .idea
-/*.conf
+src/main/resources/*.conf
