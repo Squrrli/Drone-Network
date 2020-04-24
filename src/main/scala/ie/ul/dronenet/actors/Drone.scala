@@ -6,6 +6,9 @@ import akka.actor.typed.scaladsl.{AbstractBehavior, ActorContext, Behaviors}
 import akka.cluster.sharding.typed.scaladsl.{ClusterSharding, Entity, EntityTypeKey}
 import ie.ul.dronenet.actors.DroneManager.RequestBaseStation
 
+import scala.concurrent.duration._
+import scala.concurrent.{Await, Future}
+
 object Drone {
   val DroneServiceKey: ServiceKey[Command] = ServiceKey[Command]("droneService")
   val TypeKey: EntityTypeKey[Command] =
@@ -26,6 +29,8 @@ object Drone {
 
   final case class GetDetails(replyTo: ActorRef[DetailsResponse]) extends Command
   final case class DetailsResponse(details: (String, Double, Double)) extends Response
+
+  final case class Execute(replyTo: ActorRef[BaseStation.MissionResponse], origin: (Double, Double), dest: (Double, Double), distance: Double) extends Command
 
   def apply(droneId: String, dType: String, range: Double, maxWeight: Double, droneManager: ActorRef[DroneManager.Command]): Behavior[Command] =
     Behaviors.setup[Command] {
@@ -58,6 +63,13 @@ object Drone {
 
        case GetDetails(replyTo) =>
          replyTo ! DetailsResponse((dType, range, maxWeight))
+         Behaviors.same
+
+       case Execute(replyTo, origin, dest, distance) =>
+         val tempDroneSpeed = 10 // 10m/s
+         context.log.info(s"\n${context.self.path} Executing Mission... duration: ${distance/tempDroneSpeed} seconds")
+         val res = Await.result(Future.successful(true), (distance/tempDroneSpeed).second)
+         replyTo ! BaseStation.MissionResponse(res)
          Behaviors.same
      }
    }

@@ -93,8 +93,8 @@ class BaseStation(context: ActorContext[BaseStation.Command], baseId: String, ma
             context.log.info(s"\n\n\nRegistered drone details: ${details.toString()}\n\n")
             // Form JSON and execute MiniZinc Model
             val mapped = details.map(res => Tuple3(res.details._1, res.details._2, res.details._3))
-            val tempFile = writeFile(mapped, calculateTotalDistance(origin, dest, distance), weight)
-            var droneIndex = -1
+            val calcDistance = calculateTotalDistance(origin, dest, distance)
+            val tempFile = writeFile(mapped, calcDistance, weight)
 
             {
               if (System.getProperty("os.name").contains("win"))  pickDrone(Seq("minizinc", "src\\main\\resources\\drone_model.mzn", tempFile.getAbsolutePath).!!)
@@ -104,13 +104,11 @@ class BaseStation(context: ActorContext[BaseStation.Command], baseId: String, ma
                 context.log.debug("No Suitable drones - Forwarding to another Base if available")
                 manager ! BaseManager.ForwardMissionRequest(ExecuteMission(replyTo, origin, dest, weight, distance))
               case i: Int  => context.log.debug(s"sending mission to ${registeredDrones.toList(i)}")
+                registeredDrones.toList(i) ! Drone.Execute(replyTo, origin, dest, distance) // TODO: Fix value for distance, not considering distance functions
             }
           }
-
           case Failure(exception) => context.log.error(exception.getMessage)
         }
-
-
         Behaviors.same
       }
     }
@@ -147,7 +145,7 @@ class BaseStation(context: ActorContext[BaseStation.Command], baseId: String, ma
   private def calculateTotalDistance(start: (Double, Double), end: (Double, Double), interDistance: Double): BigDecimal = {
     context.log.debug(s"distance received from frontend: ${interDistance}m or ${interDistance/1000}km")
     distance((this.latlng.head, this.latlng(1)), start) + distance((this.latlng.head, this.latlng(1)), end) + interDistance
-    BigDecimal(1337)
+//    BigDecimal(1337)
   }
 
   /**
@@ -158,7 +156,7 @@ class BaseStation(context: ActorContext[BaseStation.Command], baseId: String, ma
    */
   // TODO: Look into distance formula, result seems far too high
   private def distance(p1: (Double, Double), p2: (Double, Double)): BigDecimal = {
-    val R = 6373000 // Radius of Earth in meters
+    val R = 6373 // Radius of Earth in meters
     val b2SLng = p2._2 - p1._2
     val b2SLat = p2._1 - p1._1
     val a1 = (Math.sin(b2SLat/2) * Math.sin(b2SLat/2)) + Math.cos(p1._1) * Math.cos(p2._1) * (Math.sin(b2SLng/2) * Math.sin(b2SLng/2))
