@@ -104,8 +104,6 @@ class BaseManager(context: ActorContext[BaseManager.Command], baseName: String, 
             Future.sequence(futures).onComplete {
               case Success(responses) =>
                 val mapped = responses.map(res => Tuple3(res.details._1, res.details._2, res.details._3))
-                context.log.info("replying to IOSocket")
-                context.log.info("\n\n\n" + mapped + "\n\n")
                 replyTo ! AllDetailsResponse(mapped)
               case Failure(_) => context.log.error("something went wrong while getting futures")
             }
