@@ -72,6 +72,7 @@ class IOSocket(context: ActorContext[IOSocket.Command]) extends AbstractBehavior
       concat (
         get {
           path("get-stations") {
+            context.log.debug("/get-stations endpoint hit")
             val optStations: Future[Option[List[(String, Double, Double)]]] = getStations
 
             onSuccess(optStations) {
@@ -86,16 +87,18 @@ class IOSocket(context: ActorContext[IOSocket.Command]) extends AbstractBehavior
           entity(as[Mission]) { mission =>
             context.log.debug(s"Mission: [${mission.origin.head}, ${mission.origin(1)}] to [${mission.dest.head}, ${mission.dest(1)}] with ${mission.weight}g payload")
 
-            implicit val timeout: Timeout = 10.second
+            implicit val timeout: Timeout = 5.second
             val res: Future[BaseStation.MissionResponse] = router.ask(ref => BaseStation.ExecuteMission(ref,
               (mission.origin.head, mission.origin(1)), (mission.dest.head, mission.dest(1)), mission.weight, mission.distance))
 
             onComplete(res) {
-              case util.Success(value) => complete(value.toString)
-              case Failure(exception) => complete(exception)
+              case util.Success(value) =>
+                context.log.debug(s"Successfully found Drone: ${value}")
+                complete(value.toString)
+              case Failure(exception) =>
+                context.log.debug(s"FutureException: ${exception}")
+                complete(StatusCodes.InternalServerError)
             }
-//            val err = 42 / 0
-//            complete((42/0).toString)
           }
         }
       )

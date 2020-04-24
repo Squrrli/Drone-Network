@@ -81,7 +81,7 @@ class BaseStation(context: ActorContext[BaseStation.Command], baseId: String, ma
         replyTo ! DetailsResponse(res)
         Behaviors.same
 
-      case ExecuteMission(replyTo, origin, dest, weight, distance) => {
+      case mission: ExecuteMission => {
         // Get Registered Drone Details
         val droneFutures: List[Future[Drone.DetailsResponse]] = registeredDrones.toList.map(drone => {
           val f: Future[Drone.DetailsResponse] = drone.ask(ref => Drone.GetDetails(ref))
@@ -92,9 +92,11 @@ class BaseStation(context: ActorContext[BaseStation.Command], baseId: String, ma
           case Success(details) => {
             context.log.info(s"\n\n\nRegistered drone details: ${details.toString()}\n\n")
             // Form JSON and execute MiniZinc Model
-            val mapped = details.map(res => Tuple3(res.details._1, res.details._2, res.details._3))
-            val calcDistance = calculateTotalDistance(origin, dest, distance)
-            val tempFile = writeFile(mapped, calcDistance, weight)
+            val mapped = details.map(res => {
+              Tuple3(res.details._1, res.details._2, res.details._3)
+            })
+            val calcDistance = calculateTotalDistance(mission.origin, mission.dest, mission.distance)
+            val tempFile = writeFile(mapped, calcDistance, mission.weight)
 
             {
               if (System.getProperty("os.name").contains("win"))  pickDrone(Seq("minizinc", "src\\main\\resources\\drone_model.mzn", tempFile.getAbsolutePath).!!)
@@ -102,9 +104,11 @@ class BaseStation(context: ActorContext[BaseStation.Command], baseId: String, ma
             } match {
               case -1 =>
                 context.log.debug("No Suitable drones - Forwarding to another Base if available")
-                manager ! BaseManager.ForwardMissionRequest(ExecuteMission(replyTo, origin, dest, weight, distance))
+                manager ! BaseManager.ForwardMissionRequest(mission)
+
+
               case i: Int  => context.log.debug(s"sending mission to ${registeredDrones.toList(i)}")
-                registeredDrones.toList(i) ! Drone.Execute(replyTo, origin, dest, distance) // TODO: Fix value for distance, not considering distance functions
+                registeredDrones.toList(i) ! Drone.Execute(mission.replyTo, mission.origin, mission.dest, mission.distance) // TODO: Fix value for distance, not considering distance functions
             }
           }
           case Failure(exception) => context.log.error(exception.getMessage)
@@ -113,17 +117,23 @@ class BaseStation(context: ActorContext[BaseStation.Command], baseId: String, ma
       }
     }
   }
+
   def writeFile(details: List[(String, Double, Double)], distance: BigDecimal, weight: Double): File = {
     val file = File.createTempFile("drones_", ".json")
     val bw = new BufferedWriter(new FileWriter(file))
     var str: String = "{ \"distance\": " + distance + ", \"weight\": " + weight+ ", \"n\":" + details.size + ", \"drone_attr\": [{\"e\": \"Range\"}, {\"e\": \"Capacity\"}], \"drones\": ["
     bw.write(str)
-    details.filter(_ != details.last)
-          .foreach(d => {
-            str = s"[${d._2}, ${d._3}],"
-            bw.write(str)
-          })
-    str = s"[${details.last._2}, ${details.last._3}]]}"
+//    details.filter(_ != details.last)
+//          .foreach(d => {
+//            str = s"[${d._2}, ${d._3}],"
+//            bw.write(str)
+//          })
+    for(i <- details.indices) {
+      str = s"[${details(i)._2}, ${details(i)._3}]"
+      if (i != details.size-1)  str = str + ","
+      bw.write(str)
+    }
+    str = s"]}"
     bw.write(str) // Write Last in list WITHOUT comma to form correct JSON
     bw.close()
     context.log.info(s"Temporary File Created @ ${file.getAbsolutePath}")
@@ -144,7 +154,7 @@ class BaseStation(context: ActorContext[BaseStation.Command], baseId: String, ma
   // Return total distance of Mission => Base -> Start -> End -> Base
   private def calculateTotalDistance(start: (Double, Double), end: (Double, Double), interDistance: Double): BigDecimal = {
     context.log.debug(s"distance received from frontend: ${interDistance}m or ${interDistance/1000}km")
-    distance((this.latlng.head, this.latlng(1)), start) + distance((this.latlng.head, this.latlng(1)), end) + interDistance
+    distance((this.latlng.head, this.latlng(1)), start) + distance((this.latlng.head, this.latlng(1)), end) + interDistance/1000
 //    BigDecimal(1337)
   }
 
