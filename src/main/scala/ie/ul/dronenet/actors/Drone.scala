@@ -66,7 +66,7 @@ object Drone {
          Behaviors.same
 
        case Execute(replyTo, origin, dest, distance) =>
-         val tempDroneSpeed = 10 // 10m/s
+         val tempDroneSpeed = 500 // 10m/s
          context.log.info(s"\n${context.self.path} Executing Mission... duration: ${distance/tempDroneSpeed} seconds")
          val res = Await.result(Future.successful(true), (distance/tempDroneSpeed).second)
          replyTo ! BaseStation.MissionResponse(res)

@@ -23,6 +23,8 @@ function Map({baseStations}) {
   const originRef = useRef(null);
   const destRef = useRef(null);
 
+  const [stationMarkers, setStationMarkers] = useState([])
+
   useEffect(() => {
     mapRef.current = L.map("map", {
       center: [53, -7],
@@ -70,8 +72,6 @@ function Map({baseStations}) {
   }, []);
 
   useEffect(() => {
-    console.log("statiosn in MAP: ", baseStations);
-
     let baseIcon = L.icon({
       iconUrl: 'wifi.svg',
       iconSize: [50,50],
@@ -81,8 +81,7 @@ function Map({baseStations}) {
     for(let base of baseStations) {
       let [name, lat, lng] = base;
       if(lat != undefined ) {
-        // L.marker([lat, lng], {icon: greenWifiIcon}).addTo(mapRef.current);
-        L.marker([lat, lng], {icon: baseIcon}).addTo(mapRef.current).on('click', (e) => {
+        let m = L.marker([lat, lng], {icon: baseIcon}).addTo(mapRef.current).on('click', (e) => {
           console.log(e.latlng);
           var popup = L.popup().setContent(ReactDOMServer.renderToString(
             <ul>
@@ -92,9 +91,14 @@ function Map({baseStations}) {
             </ul>
           )).setLatLng(e.latlng);
           popup.openOn(mapRef.current);
-        })
+          
+        });
+        // setStationMarkers(stationMarkers.push(m))
+        // console.log(markers);
+
       }
     }
+    // setStationMarkers(markers);
   
   }, [baseStations]);
 
