@@ -3,7 +3,6 @@ import ReactDOMServer from "react-dom/server";
 import ReactDOM from 'react-dom';
 import L, { marker } from "leaflet";
 import MissionForm from "../MissionForm";
-import HelpMe from "../HelpMe";
 
   const style = {
     width: "100%",
@@ -22,6 +21,8 @@ function Map({baseStations}) {
   const mapRef = useRef(null);
   const originRef = useRef(null);
   const destRef = useRef(null);
+
+  const [stationMarkers, setStationMarkers] = useState([])
 
   useEffect(() => {
     mapRef.current = L.map("map", {
@@ -42,7 +43,7 @@ function Map({baseStations}) {
       else                                  addMarker('originIcon.svg', coords);
 
       if(originRef.current !== null && destRef.current !== null ) 
-        ReactDOM.render(<HelpMe origin={originRef.current} dest={destRef.current}/>, document.getElementById('input-form'));
+        ReactDOM.render(<MissionForm origin={originRef.current} dest={destRef.current}/>, document.getElementById('input-form'));
     });
 
     const addMarker = (iconUrl, coords) => {
@@ -70,8 +71,6 @@ function Map({baseStations}) {
   }, []);
 
   useEffect(() => {
-    console.log("statiosn in MAP: ", baseStations);
-
     let baseIcon = L.icon({
       iconUrl: 'wifi.svg',
       iconSize: [50,50],
@@ -81,8 +80,7 @@ function Map({baseStations}) {
     for(let base of baseStations) {
       let [name, lat, lng] = base;
       if(lat != undefined ) {
-        // L.marker([lat, lng], {icon: greenWifiIcon}).addTo(mapRef.current);
-        L.marker([lat, lng], {icon: baseIcon}).addTo(mapRef.current).on('click', (e) => {
+        let m = L.marker([lat, lng], {icon: baseIcon}).addTo(mapRef.current).on('click', (e) => {
           console.log(e.latlng);
           var popup = L.popup().setContent(ReactDOMServer.renderToString(
             <ul>
@@ -92,7 +90,8 @@ function Map({baseStations}) {
             </ul>
           )).setLatLng(e.latlng);
           popup.openOn(mapRef.current);
-        })
+          
+        });
       }
     }
   

@@ -1,31 +1,85 @@
-import React, { useState, useEffect } from "react";
+import React from 'react'
+import ReactDOM from 'react-dom'
 
-export default function MissionForm() {
-  let [weightInput, setWeight] = useState(0);
+export default class MissionForm extends React.Component {
+    constructor(props) {
+      super(props);
+      this.state = {
+        weight: 0,
+      };
+    }
+  
+    handleChange = (e) => {
+      this.setState({
+        weight: e.target.value
+      });
+    }
 
-  useEffect(() => {
+    handleSubmit = (e) => {
+        e.preventDefault();
+        let payloadWeight = parseFloat(this.state.weight);
+        let distance = this.props.origin.getLatLng().distanceTo(this.props.dest.getLatLng());
+        fetch("http://192.168.43.100:8888/", {
+              method: 'POST', // *GET, POST, PUT, DELETE, etc.
+              mode: 'cors', // no-cors, *cors, same-origin
+              headers: {
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({
+                'origin': [
+                  this.props.origin.getLatLng().lat,
+                  this.props.origin.getLatLng().lng
+                ],
+                'dest': [
+                  this.props.dest.getLatLng().lat,
+                  this.props.dest.getLatLng().lng
+                ],
+                'distance': distance,
+                'weight': payloadWeight
+              }) 
+            })
+        .then(response => {
+            console.log(response);
+            return response;
+        })
+        .then(json => {
+            console.log(json);
+        });
 
+    }
+  
+    render() {
+      const labelStyle = {
+        //   display: 'block',
+          marginRight: '20px'
+      }
 
-  }, []);
+      return (
+        <div>
+          <form onSubmit={this.handleSubmit}>
 
-  // const  = (event) => {
-  //   event.preventDefault();
-  //   console.log("Posting Mission details to backend.");
-  // }
+            <label style={labelStyle} >Origin Latitude:</label>
+            <input type="text" name="lat"disabled value={this.props.origin.getLatLng().lat}/>
 
-  return (
-    <form onSubmit={postMission1}>
-        <label>
-          Name:
-          <input type="text" onChange={setWeight}/>
-          </label>
-        <input type="submit" value="Submit" />
-      </form>
-  );
-}
+            <label style={labelStyle} >Origin Longitude:</label>
+            <input type="text" name="lng"disabled value={this.props.origin.getLatLng().lng}/>
+            
+            <label style={labelStyle} >Dest Latitude:</label>
+            <input type="text" name="lat"disabled value={this.props.dest.getLatLng().lat}/>
 
-function postMission1(event) {
-  event.preventDefault();
-  console.log("Posting Mission details to backend.");
-
-}
+            <label style={labelStyle} >Dest Longitude:</label>
+            <input type="text" name="lng"disabled value={this.props.dest.getLatLng().lng}/>
+            
+            <input
+              type="text"
+              placeholder="Payload Weight"
+              value={this.weight}
+              onChange={this.handleChange}
+            />
+            <button onClick={this.handleSubmit}>Submit</button>
+            {/* {showMessage && <div>{message}</div>} */}
+          </form>
+        </div>
+      )
+    }
+  }
