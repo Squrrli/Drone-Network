@@ -8,7 +8,7 @@ function App() {
   // request stop location
   useEffect( () => {
     const fetchStations = () => {
-      fetch("http://192.168.43.222:8888/get-stations")
+      fetch("http://192.168.43.100:8888/get-stations")
         .then(response => {
           return response.json();
         }).then(json => {

@@ -3,7 +3,6 @@ import ReactDOMServer from "react-dom/server";
 import ReactDOM from 'react-dom';
 import L, { marker } from "leaflet";
 import MissionForm from "../MissionForm";
-import HelpMe from "../HelpMe";
 
   const style = {
     width: "100%",
@@ -44,7 +43,7 @@ function Map({baseStations}) {
       else                                  addMarker('originIcon.svg', coords);
 
       if(originRef.current !== null && destRef.current !== null ) 
-        ReactDOM.render(<HelpMe origin={originRef.current} dest={destRef.current}/>, document.getElementById('input-form'));
+        ReactDOM.render(<MissionForm origin={originRef.current} dest={destRef.current}/>, document.getElementById('input-form'));
     });
 
     const addMarker = (iconUrl, coords) => {
@@ -93,12 +92,8 @@ function Map({baseStations}) {
           popup.openOn(mapRef.current);
           
         });
-        // setStationMarkers(stationMarkers.push(m))
-        // console.log(markers);
-
       }
     }
-    // setStationMarkers(markers);
   
   }, [baseStations]);
 
