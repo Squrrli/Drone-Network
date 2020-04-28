@@ -36,7 +36,7 @@ object BaseStation {
   case class RegisterDrone(drone: ActorRef[Drone.Command]) extends Command
   case class UnregisterDrone(drone: ActorRef[Drone.Command]) extends Command
 
-  case class ExecuteMission(replyTo: ActorRef[MissionResponse], origin: (Double, Double), dest: (Double, Double), weight: Double, distance: Double) extends Command
+  case class ExecuteMission(replyTo: ActorRef[MissionResponse], origin: (Double, Double), dest: (Double, Double), weight: Double, distance: Double, reqId: Int) extends Command
   case class MissionResponse(success: Boolean) extends Response
 
   def apply(baseId: String, manager: ActorRef[BaseManager.Command], capacity: Double, latlng: Seq[Double]): Behavior[Command] =
@@ -57,6 +57,7 @@ class BaseStation(context: ActorContext[BaseStation.Command], baseId: String, ma
   implicit val scheduler: typed.Scheduler = context.system.scheduler
 
   private val registeredDrones: mutable.Set[ActorRef[Drone.Command]] = mutable.Set()
+  private var lastMissionReq: Int = -1
 
   override def onMessage(msg: BaseStation.Command): Behavior[BaseStation.Command] = {
     msg match {
@@ -81,40 +82,44 @@ class BaseStation(context: ActorContext[BaseStation.Command], baseId: String, ma
         replyTo ! DetailsResponse(res)
         Behaviors.same
 
-      case mission: ExecuteMission => {
-        // Get Registered Drone Details
-        val droneFutures: List[Future[Drone.DetailsResponse]] = registeredDrones.toList.map(drone => {
-          val f: Future[Drone.DetailsResponse] = drone.ask(ref => Drone.GetDetails(ref))
-          f
-        })
+      case mission: ExecuteMission =>
+        context.log.debug(s"lastMissionReq: ${lastMissionReq}, mission.reqID: ${mission.reqId}")
+        if(lastMissionReq < mission.reqId) {
+          // Get Registered Drone Details
+          val droneFutures: List[Future[Drone.DetailsResponse]] = registeredDrones.toList.map(drone => {
+            val f: Future[Drone.DetailsResponse] = drone.ask(ref => Drone.GetDetails(ref))
+            f
+          })
 
-        Future.sequence(droneFutures).onComplete {
-          case Success(details) => {
-            context.log.info(s"\n\n\nRegistered drone details: ${details.toString()}\n\n")
-            // Form JSON and execute MiniZinc Model
-            val mapped = details.map(res => {
-              Tuple3(res.details._1, res.details._2, res.details._3)
-            })
-            val calcDistance = calculateTotalDistance(mission.origin, mission.dest, mission.distance)
-            val tempFile = writeFile(mapped, calcDistance, mission.weight)
+          Future.sequence(droneFutures).onComplete {
+            case Success(details) => {
+              context.log.info(s"\n\n\nRegistered drone details: ${details.toString()}\n\n")
+              // Form JSON and execute MiniZinc Model
+              val mapped = details.map(res => {
+                Tuple3(res.details._1, res.details._2, res.details._3)
+              })
+              val calcDistance = calculateTotalDistance(mission.origin, mission.dest, mission.distance)
+              val tempFile = writeFile(mapped, calcDistance, mission.weight)
 
-            {
-              if (System.getProperty("os.name").contains("win"))  pickDrone(Seq("minizinc", "src\\main\\resources\\drone_model.mzn", tempFile.getAbsolutePath).!!)
-              else                                                pickDrone(Seq("minizinc", "src/main/resources/drone_model.mzn", tempFile.getAbsolutePath).!!)
-            } match {
-              case -1 =>
-                context.log.debug("No Suitable drones - Forwarding to another Base if available")
-                manager ! BaseManager.ForwardMissionRequest(mission)
-
-
-              case i: Int  => context.log.debug(s"sending mission to ${registeredDrones.toList(i)}")
-                registeredDrones.toList(i) ! Drone.Execute(mission.replyTo, mission.origin, mission.dest, mission.distance) // TODO: Fix value for distance, not considering distance functions
+              { // Determine OS actor is running on
+                if (System.getProperty("os.name").contains("win"))  pickDrone(Seq("minizinc", "src\\main\\resources\\drone_model.mzn", tempFile.getAbsolutePath).!!)
+                else                                                pickDrone(Seq("minizinc", "src/main/resources/drone_model.mzn", tempFile.getAbsolutePath).!!)
+              } match {
+                case -1 =>
+                  if(lastMissionReq < mission.reqId) {
+                    context.log.debug("No Suitable drones - Forwarding to another Base if available")
+                    manager ! BaseManager.ForwardMissionRequest(mission)
+                  } else
+                    context.log.debug(s"Base Station unable to service request: ${mission.reqId}")
+                case i: Int  => context.log.debug(s"sending mission to ${registeredDrones.toList(i)}")
+                  registeredDrones.toList(i) ! Drone.Execute(mission.replyTo, mission.origin, mission.dest, mission.distance) // TODO: Fix value for distance, not considering distance functions
+              }
+              lastMissionReq = mission.reqId
             }
+            case Failure(exception) => context.log.error(exception.getMessage)
           }
-          case Failure(exception) => context.log.error(exception.getMessage)
         }
         Behaviors.same
-      }
     }
   }
 
@@ -123,11 +128,6 @@ class BaseStation(context: ActorContext[BaseStation.Command], baseId: String, ma
     val bw = new BufferedWriter(new FileWriter(file))
     var str: String = "{ \"distance\": " + distance + ", \"weight\": " + weight+ ", \"n\":" + details.size + ", \"drone_attr\": [{\"e\": \"Range\"}, {\"e\": \"Capacity\"}], \"drones\": ["
     bw.write(str)
-//    details.filter(_ != details.last)
-//          .foreach(d => {
-//            str = s"[${d._2}, ${d._3}],"
-//            bw.write(str)
-//          })
     for(i <- details.indices) {
       str = s"[${details(i)._2}, ${details(i)._3}]"
       if (i != details.size-1)  str = str + ","

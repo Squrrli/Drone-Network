@@ -61,6 +61,7 @@ class IOSocket(context: ActorContext[IOSocket.Command]) extends AbstractBehavior
   implicit val scheduler: Scheduler = context.system.scheduler
   var baseManager: ActorRef[BaseManager.Command] = _
   var baseStations: List[(String, Double, Double)] = _
+  private var missionReqId: Int = 0 // TODO: maintain state after actor down/ restart
 
   val exceptionHandler: ExceptionHandler = ExceptionHandler {
     case _: TimeoutException => complete(s"${StatusCodes.RequestTimeout}")
@@ -72,12 +73,12 @@ class IOSocket(context: ActorContext[IOSocket.Command]) extends AbstractBehavior
       concat (
         get {
           path("get-stations") {
-            context.log.debug("/get-stations endpoint hit")
+//            context.log.debug("/get-stations endpoint hit")
             val optStations: Future[Option[List[(String, Double, Double)]]] = getStations
 
             onSuccess(optStations) {
               case Some(stationsList) =>
-                context.log.debug(stationsList.toString())
+//                context.log.debug(stationsList.toString())
                 complete(stationsList.toJson.toString())
               case None               => complete(StatusCodes.InternalServerError)
             }
@@ -89,7 +90,8 @@ class IOSocket(context: ActorContext[IOSocket.Command]) extends AbstractBehavior
 
             implicit val timeout: Timeout = 5.second
             val res: Future[BaseStation.MissionResponse] = router.ask(ref => BaseStation.ExecuteMission(ref,
-              (mission.origin.head, mission.origin(1)), (mission.dest.head, mission.dest(1)), mission.weight, mission.distance))
+              (mission.origin.head, mission.origin(1)), (mission.dest.head, mission.dest(1)), mission.weight, mission.distance, missionReqId))
+            missionReqId += 1
 
             onComplete(res) {
               case util.Success(value) =>
